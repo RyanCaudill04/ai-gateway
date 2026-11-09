@@ -38,7 +38,7 @@ services ──┘    │        │                            │          │
 ### Steps
 1. Clone the repo:
    ```bash
-   git clone <repo-url> ai-gateway && cd ai-gateway
+   git clone https://github.com/RyanCaudill04/ai-gateway.git && cd ai-gateway
    ```
 2. Create your environment file and add API keys for the providers you want (empty = disabled):
    ```bash
