@@ -1,0 +1,22 @@
+# TLS is handled upstream (Cloudflare Tunnel or your own reverse proxy),
+# so Caddy listens on plain HTTP inside the compose network.
+:80 {
+	# OpenAI-compatible API for services
+	handle /v1/* {
+		reverse_proxy router:8080 {
+			flush_interval -1 # stream SSE tokens immediately
+		}
+	}
+
+	# UI-only endpoints (usage, conversations, ...)
+	handle /api/* {
+		reverse_proxy router:8080 {
+			flush_interval -1
+		}
+	}
+
+	# Chat UI
+	handle {
+		reverse_proxy ui:80
+	}
+}

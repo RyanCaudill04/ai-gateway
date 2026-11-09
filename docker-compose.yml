@@ -1,0 +1,72 @@
+name: ai-gateway
+
+services:
+  # Go router: OpenAI-compatible API, provider fallback, usage tracking.
+  # Sole owner of the SQLite database.
+  router:
+    build: ./router
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      LISTEN_ADDR: ":8080"
+      DATABASE_PATH: /data/gateway.db
+      PROVIDERS_CONFIG: /config/providers.yaml
+    volumes:
+      - router-data:/data
+      - ./config:/config:ro
+    expose:
+      - "8080"
+    # The image has no shell/curl, so the router binary checks its own /healthz
+    healthcheck:
+      test: ["CMD", "/router", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # React chat UI, built to static files and served by nginx.
+  # Talks only to the router's API, never to providers or the database.
+  ui:
+    build: ./ui
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  # Single entry point: /v1/* and /api/* → router, everything else → ui.
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      router:
+        condition: service_healthy
+      ui:
+        condition: service_started
+
+  # Optional: expose the gateway through a Cloudflare Tunnel (no open ports).
+  #   docker compose --profile tunnel up -d
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - proxy
+
+  # Optional: local models for the `private` route. Never exposed outside the compose network.
+  #   docker compose --profile ollama up -d
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  router-data:
+  ollama-models:

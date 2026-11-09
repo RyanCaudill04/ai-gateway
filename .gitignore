@@ -1,0 +1,24 @@
+# Secrets and local config — copy the *.example files instead
+.env
+.env.*
+!.env.example
+config/providers.yaml
+
+# Local data (SQLite lives in a Docker volume, but in case you run outside Docker)
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Go
+router/bin/
+router/router
+
+# Node / Vite
+node_modules/
+ui/dist/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

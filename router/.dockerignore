@@ -1,0 +1,6 @@
+bin
+router
+*.db
+*.db-*
+.git
+*.md
