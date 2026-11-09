@@ -5,7 +5,7 @@ A self-hosted, OpenAI-compatible gateway that spreads requests across free-tier 
 local models via Ollama, and includes a chat UI that shows the usage left for each provider and model.
 
 > **Status:** early setup. Docker setup is in place; the router is a stub that only serves a health check.
-> See [plan.md](plan.md) for the design.
+> The roadmap is tracked in [GitHub issues](https://github.com/RyanCaudill04/ai-gateway/issues), grouped by [milestone](https://github.com/RyanCaudill04/ai-gateway/milestones).
 
 ## How it fits together
 
@@ -101,5 +101,4 @@ router/    Go service (Dockerfile, cmd/router)
 ui/        React + Vite app (Dockerfile, nginx.conf)
 proxy/     Caddyfile
 config/    providers.example.yaml (copy to providers.yaml)
-plan.md    design notes and roadmap
 ```

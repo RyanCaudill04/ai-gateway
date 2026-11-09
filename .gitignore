@@ -22,3 +22,6 @@ ui/dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Private planning notes (not part of the repo)
+plan.md
