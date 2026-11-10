@@ -4,7 +4,8 @@ A self-hosted, OpenAI-compatible gateway that spreads requests across free-tier 
 (Groq, Gemini, Cerebras, Mistral, OpenRouter, Workers AI, …) with automatic fallback, falls back to
 local models via Ollama, and includes a chat UI that shows the usage left for each provider and model.
 
-> **Status:** early setup. Docker setup is in place; the router is a stub that only serves a health check.
+> **Status:** early setup. The router only serves a health check (`GET /api/health`) and the UI is a
+> placeholder homepage that shows whether the router is up.
 > The roadmap is tracked in [GitHub issues](https://github.com/RyanCaudill04/ai-gateway/issues), grouped by [milestone](https://github.com/RyanCaudill04/ai-gateway/milestones).
 
 ## How it fits together
@@ -52,7 +53,11 @@ services ──┘    │        │                            │          │
    ```bash
    docker compose up -d --build
    ```
-5. Open <http://localhost:8080> (or the `HTTP_PORT` you set).
+5. Open <http://localhost:8080> (or the `HTTP_PORT` you set). Check the API with:
+   ```bash
+   curl http://localhost:8080/api/health
+   ```
+   It should return `{"status":"ok"}`.
 
 ### Optional add-ons
 Local models with Ollama:
@@ -61,10 +66,24 @@ docker compose --profile ollama up -d
 docker compose exec ollama ollama pull llama3.2:3b
 ```
 
-Public access through a Cloudflare Tunnel: create a tunnel in the Cloudflare dashboard, point its
-public hostname at `http://proxy:80`, put the token in `CLOUDFLARE_TUNNEL_TOKEN`, then:
+Public access through a Cloudflare Tunnel (no ports opened on the host):
+1. In the Cloudflare dashboard, go to **Zero Trust → Networks → Tunnels** and create a
+   **Cloudflared** tunnel. Copy its token. You don't need to install a connector, because compose runs it.
+2. On the tunnel's **Public Hostname** tab, add your hostname (e.g. `ai.example.com`) with service
+   type `HTTP` and URL `proxy:80`. Don't add a hostname for any other service.
+3. Put the token in `.env` as `CLOUDFLARE_TUNNEL_TOKEN`, then:
+   ```bash
+   docker compose --profile tunnel up -d --build
+   ```
+4. Check it from outside the network:
+   ```bash
+   curl https://ai.example.com/api/health
+   ```
+
+## Deploying updates (temporary)
+Until CI/CD publishes images, deploy by pulling and rebuilding on the host (e.g. the Pi):
 ```bash
-docker compose --profile tunnel up -d
+cd ai-gateway && git pull && docker compose --profile tunnel up -d --build
 ```
 
 ## Data
