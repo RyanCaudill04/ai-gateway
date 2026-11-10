@@ -12,13 +12,6 @@ providers:
       - id: llama-3.3-70b-versatile
         context_length: 131072
 
-  cerebras:
-    base_url: https://api.cerebras.ai/v1
-    api_key_env: CEREBRAS_API_KEY
-    models:
-      - id: llama-3.3-70b
-        context_length: 65536
-
   gemini:
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
     api_key_env: GEMINI_API_KEY
@@ -37,7 +30,7 @@ providers:
 routes:
   fast:
     - groq/llama-3.3-70b-versatile
-    - cerebras/llama-3.3-70b
+    - gemini/gemini-2.5-flash
     - ollama/llama3.2:3b
   long-context:
     - gemini/gemini-2.5-flash

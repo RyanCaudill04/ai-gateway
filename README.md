@@ -1,7 +1,7 @@
 # AI Gateway
 
 A self-hosted, OpenAI-compatible gateway that spreads requests across free-tier LLM providers
-(Groq, Gemini, Cerebras, Mistral, OpenRouter, Workers AI, …) with automatic fallback, falls back to
+(Groq, Gemini, OpenRouter, Workers AI, …) with automatic fallback, falls back to
 local models via Ollama, and includes a chat UI that shows the usage left for each provider and model.
 
 > **Status:** early setup. The router only serves a health check (`GET /api/health`) and the UI is a
