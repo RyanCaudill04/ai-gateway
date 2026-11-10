@@ -29,6 +29,7 @@ services ──┘    │        │                            │          │
 | `proxy` | Caddy. The single entry point; routes paths to `router` or `ui`. |
 | `cloudflared` | *Optional* (`tunnel` profile). Publishes the gateway through a Cloudflare Tunnel. |
 | `ollama` | *Optional* (`ollama` profile). Local models for the `private` route. |
+| `updater` | *Optional* (`autoupdate` profile). Pulls and applies new images, rolling back on failure. |
 
 ## Install
 
@@ -49,10 +50,16 @@ services ──┘    │        │                            │          │
    ```bash
    cp config/providers.example.yaml config/providers.yaml
    ```
-4. Start it:
+4. Start it, using one of:
    ```bash
+   # Prebuilt images from GHCR (no build; fast on a Raspberry Pi)
+   docker compose pull && docker compose up -d
+   ```
+   ```bash
+   # Or build from source (development, or before any release is published)
    docker compose up -d --build
    ```
+   Prebuilt images use the tag from `IMAGE_TAG` in `.env` (default `stable`, the latest release).
 5. Open <http://localhost:8080> (or the `HTTP_PORT` you set). Check the API with:
    ```bash
    curl http://localhost:8080/api/health
@@ -73,18 +80,41 @@ Public access through a Cloudflare Tunnel (no ports opened on the host):
    type `HTTP` and URL `proxy:80`. Don't add a hostname for any other service.
 3. Put the token in `.env` as `CLOUDFLARE_TUNNEL_TOKEN`, then:
    ```bash
-   docker compose --profile tunnel up -d --build
+   docker compose --profile tunnel up -d
    ```
 4. Check it from outside the network:
    ```bash
    curl https://ai.example.com/api/health
    ```
 
-## Deploying updates (temporary)
-Until CI/CD publishes images, deploy by pulling and rebuilding on the host (e.g. the Pi):
+## Updating
+Prebuilt images:
 ```bash
-cd ai-gateway && git pull && docker compose --profile tunnel up -d --build
+docker compose pull && docker compose up -d
 ```
+From source: `git pull && docker compose up -d --build`.
+
+### Automatic updates (optional)
+The `autoupdate` profile adds an `updater` service that checks GHCR every `UPDATE_INTERVAL` seconds
+(default 300). When a new image is published it applies the `router` and `ui` updates together, waits up
+to 2 minutes for the router to report healthy, and puts the previous images back if it doesn't. Each
+attempt is logged (old digest -> new digest, result), and if `UPDATE_WEBHOOK_URL` is set (Discord-compatible)
+it posts a one-line message on success and on rollback.
+
+```bash
+docker compose pull && docker compose --profile autoupdate up -d
+docker compose logs -f updater
+```
+- It follows `IMAGE_TAG` (default `stable`, which only moves on release tags). Use `edge` to follow every push to `main`.
+- **Pause:** `docker compose stop updater` (resume with `docker compose --profile autoupdate up -d`),
+  or remove it with `docker compose rm -sf updater`. Do this before manual changes.
+- The updater mounts the project directory at the same absolute path as on the host (`GATEWAY_DIR`,
+  defaulting to the directory you ran compose from). Set `GATEWAY_DIR` in `.env` if you start compose from elsewhere.
+- Only `router` and `ui` are updated; changes to `docker-compose.yml` itself still need a manual `git pull`.
+- The database is **not** backed up before updates yet (waiting on `router backup`, issue #19), so
+  back it up yourself (see Data) if a release changes the schema.
+- **Security:** the updater mounts `/var/run/docker.sock`, which gives that container root-equivalent
+  access to the host. Only enable it if you accept that.
 
 ## Data
 The SQLite database lives in the `router-data` Docker volume (`/data/gateway.db` inside the router).
@@ -103,6 +133,24 @@ docker compose start router
 Run only **one** router at a time against a database (don't use `--scale router=N`), and keep the
 volume on local disk, not a network share. SQLite's file locking isn't reliable on network filesystems.
 
+## Releasing
+CI publishes multi-arch (amd64 + arm64) images to GHCR as `ghcr.io/ryancaudill04/ai-gateway-router` and `-ui`.
+
+| Trigger | Image tags |
+|---------|-----------|
+| push to `main` | `edge`, `sha-<short>` |
+| tag `vX.Y.Z` | `X.Y.Z`, `X.Y`, `stable` |
+
+To release: make sure `main` is green, then
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+Installs following `stable` (including the auto-updater) pick it up on their next pull.
+
+GHCR packages start **private**. After the first publish, the owner must open each package
+(`ai-gateway-router`, `ai-gateway-ui`) on GitHub, go to Package settings, and set visibility to **Public**
+once, so other installs can pull without logging in.
+
 ## Development
 Run the pieces outside Docker for faster iteration:
 ```bash
@@ -119,5 +167,6 @@ cd ui && npm install && npm run dev
 router/    Go service (Dockerfile, cmd/router)
 ui/        React + Vite app (Dockerfile, nginx.conf)
 proxy/     Caddyfile
+updater/   update.sh (optional auto-updater)
 config/    providers.example.yaml (copy to providers.yaml)
 ```

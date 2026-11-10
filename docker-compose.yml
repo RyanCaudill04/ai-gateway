@@ -4,6 +4,8 @@ services:
   # Go router: OpenAI-compatible API, provider fallback, usage tracking.
   # Sole owner of the SQLite database.
   router:
+    # Prebuilt multi-arch image from GHCR; `docker compose up -d --build` builds from source instead.
+    image: ghcr.io/ryancaudill04/ai-gateway-router:${IMAGE_TAG:-stable}
     build: ./router
     restart: unless-stopped
     env_file: .env
@@ -27,6 +29,7 @@ services:
   # React chat UI, built to static files and served by nginx.
   # Talks only to the router's API, never to providers or the database.
   ui:
+    image: ghcr.io/ryancaudill04/ai-gateway-ui:${IMAGE_TAG:-stable}
     build: ./ui
     restart: unless-stopped
     expose:
@@ -66,6 +69,31 @@ services:
     restart: unless-stopped
     volumes:
       - ollama-models:/root/.ollama
+
+  # Optional: pulls new router/ui images and applies them, rolling back if the router
+  # doesn't become healthy. Off by default.  docker compose --profile autoupdate up -d
+  # See "Automatic updates" in the README. Mounting docker.sock is root-equivalent on the host.
+  #
+  # Path trick: the updater runs `docker compose` against the *host's* Docker daemon, and the
+  # daemon resolves relative bind mounts (./config, ./proxy/Caddyfile) as host paths. So the
+  # project directory is mounted at the SAME absolute path inside the updater (GATEWAY_DIR,
+  # defaulting to the directory you ran compose from) and the project name is fixed to
+  # `ai-gateway`; its compose commands then produce identical mounts and target the same containers.
+  updater:
+    image: docker:29-cli
+    profiles: ["autoupdate"]
+    restart: unless-stopped
+    entrypoint: ["sh", "/updater/update.sh"]
+    working_dir: ${GATEWAY_DIR:-${PWD}}
+    environment:
+      GATEWAY_DIR: ${GATEWAY_DIR:-${PWD}}
+      UPDATE_INTERVAL: ${UPDATE_INTERVAL:-300}
+      UPDATE_WEBHOOK_URL: ${UPDATE_WEBHOOK_URL:-}
+      IMAGE_TAG: ${IMAGE_TAG:-stable}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${GATEWAY_DIR:-${PWD}}:${GATEWAY_DIR:-${PWD}}
+      - ./updater/update.sh:/updater/update.sh:ro
 
 volumes:
   router-data:
