@@ -49,7 +49,7 @@ services:
   # Optional: expose the gateway through a Cloudflare Tunnel (no open ports).
   #   docker compose --profile tunnel up -d
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.10.7
     profiles: ["tunnel"]
     restart: unless-stopped
     command: tunnel --no-autoupdate run
