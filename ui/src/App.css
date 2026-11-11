@@ -115,6 +115,19 @@ code {
   overscroll-behavior: contain;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.5rem 0.75rem;
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.brand img {
+  border-radius: 7px;
+}
+
 .sidebar-group {
   display: flex;
   flex-direction: column;

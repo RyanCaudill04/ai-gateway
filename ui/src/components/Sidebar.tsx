@@ -21,6 +21,11 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <nav className="sidebar" aria-label="Conversations">
+      <div className="brand">
+        <img src="/favicon.svg" alt="" width="28" height="28" />
+        <span>AI Gateway</span>
+      </div>
+
       <button type="button" className="sidebar-item new-chat" onClick={onNewChat}>
         <Icon name="plus" />
         New chat
