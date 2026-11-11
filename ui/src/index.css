@@ -1,17 +1,24 @@
 :root {
-  --text: #5f5b66;
-  --text-h: #111014;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3f0;
-  --accent: #7c3aed;
-  --ok: #16a34a;
-  --down: #dc2626;
+  /* Light theme: cool off-white with a mid blue. */
+  --text: #4c5560;
+  --text-h: #1b2129;
+  --muted: #7c8794;
+  --bg: #fbfcfd;
+  --surface: #f0f3f6;
+  --border: #dbe1e8;
+  --code-bg: #eef1f5;
+  --accent: #2f95e8;
+  --on-accent: #06182a;
+  /* "Fine" is the accent blue, so the only other colours on the page are the
+     two that mean something is running low or has run out. */
+  --ok: #2f95e8;
+  --warn: #c98a1b;
+  --down: #d1524e;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  font: 17px/1.55 var(--sans);
+  font: 14px/1.55 var(--sans);
   color-scheme: light dark;
   color: var(--text);
   background: var(--bg);
@@ -20,17 +27,44 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #a1a1aa;
-    --text-h: #f4f4f5;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c4a1ff;
-    --ok: #4ade80;
-    --down: #f87171;
+    /* Dark theme: charcoal with baby blue. */
+    --text: #b3bcc7;
+    --text-h: #eef2f6;
+    --muted: #7e8995;
+    --bg: #24282d;
+    --surface: #2c3137;
+    --border: #3b424b;
+    --code-bg: #30363d;
+    --accent: #7cc6fb;
+    --on-accent: #0c1d2c;
+    --ok: #7cc6fb;
+    --warn: #e6bd78;
+    --down: #ee9490;
   }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* The page itself never scrolls or rubber-bands; only the panes inside the
+   app do (the chat thread, the sidebar, an open usage sheet). */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
   margin: 0;
+}
+
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
 }
