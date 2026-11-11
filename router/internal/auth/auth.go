@@ -31,6 +31,9 @@ type Authenticator interface {
 var (
 	// ErrUnauthenticated: no credential, or one that didn't verify. → 401
 	ErrUnauthenticated = errors.New("unauthenticated")
+	// ErrNoCredentials is the ErrUnauthenticated case where the request carried
+	// nothing to check at all, which is what scanners and bots send.
+	ErrNoCredentials = fmt.Errorf("%w: no credentials", ErrUnauthenticated)
 	// ErrForbidden: a genuine credential for someone who isn't allowed in. → 403
 	ErrForbidden = errors.New("forbidden")
 	// ErrNotConfigured: the router has no usable auth settings. → 503
@@ -61,7 +64,16 @@ func Require(a Authenticator, next http.Handler) http.Handler {
 			}
 			// The reason goes to the log only: telling the caller *why* a token
 			// failed helps someone forging one more than it helps me.
-			slog.Warn("request rejected", "status", status, "method", r.Method, "path", r.URL.Path, "reason", err.Error())
+			//
+			// Requests with no credentials at all (bots probing /v1, or every request
+			// while auth is unconfigured, which is already logged at startup) are
+			// logged at debug level only, so a scan can't fill the disk with log lines.
+			// A token that was presented and failed is worth seeing.
+			level := slog.LevelWarn
+			if errors.Is(err, ErrNoCredentials) || errors.Is(err, ErrNotConfigured) {
+				level = slog.LevelDebug
+			}
+			slog.Log(r.Context(), level, "request rejected", "status", status, "method", r.Method, "path", r.URL.Path, "reason", err.Error())
 			writeError(w, status, code, msg)
 			return
 		}

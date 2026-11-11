@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -190,6 +191,19 @@ func TestKeySetCachesAndLimitsRefetches(t *testing.T) {
 	now = now.Add(2 * keysTTL)
 	if _, err := v.Authenticate(request(good)); err != nil {
 		t.Fatalf("cached key stopped working when the refetch failed: %v", err)
+	}
+}
+
+// A caller that hangs up straight away must not be able to cancel the key
+// fetch its request triggered (and so block key loading for everyone).
+func TestKeyFetchIgnoresRequestCancellation(t *testing.T) {
+	f := newFakeAccess(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	r := request(f.sign(jwt.SigningMethodRS256, f.key, testKid, f.claims())).WithContext(ctx)
+	if _, err := f.verifier().Authenticate(r); err != nil {
+		t.Fatalf("key fetch was tied to the request's context: %v", err)
 	}
 }
 

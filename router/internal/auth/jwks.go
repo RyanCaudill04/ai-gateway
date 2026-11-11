@@ -49,7 +49,12 @@ func newKeySet(url string) *keySet {
 // get returns the key with the given ID, refetching the set when the key is
 // unknown (rotation) or the cache is stale. If a refetch fails, keys already
 // cached keep working: a Cloudflare blip shouldn't sign me out.
-func (s *keySet) get(ctx context.Context, kid string) (*rsa.PublicKey, error) {
+//
+// The fetch deliberately doesn't use the request's context. Otherwise a caller
+// could send a token and hang up at once, cancelling the fetch it triggered
+// and (because of minRefreshInterval) blocking the next one for a minute;
+// repeated, that would keep the router from ever loading keys.
+func (s *keySet) get(kid string) (*rsa.PublicKey, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -58,7 +63,7 @@ func (s *keySet) get(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	fresh := now.Sub(s.fetchedAt) < keysTTL
 	if (!ok || !fresh) && now.Sub(s.lastAttempt) >= minRefreshInterval {
 		s.lastAttempt = now
-		keys, err := s.fetch(ctx)
+		keys, err := s.fetch()
 		if err != nil {
 			slog.Error("fetching Cloudflare Access keys failed", "url", s.url, "err", err)
 		} else {
@@ -72,8 +77,9 @@ func (s *keySet) get(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	return key, nil
 }
 
-func (s *keySet) fetch(ctx context.Context) (map[string]*rsa.PublicKey, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.url, nil)
+func (s *keySet) fetch() (map[string]*rsa.PublicKey, error) {
+	// Bounded by s.client.Timeout.
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, s.url, nil)
 	if err != nil {
 		return nil, err
 	}
