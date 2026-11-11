@@ -4,8 +4,8 @@ A self-hosted, OpenAI-compatible gateway that spreads requests across free-tier 
 (Groq, Gemini, OpenRouter, Workers AI, …) with automatic fallback, falls back to
 local models via Ollama, and includes a chat UI that shows the usage left for each provider and model.
 
-> **Status:** early setup. The router only serves a health check (`GET /api/health`) and the UI is a
-> placeholder homepage that shows whether the router is up.
+> **Status:** early setup. The router only serves a health check (`GET /api/health`). The UI is a
+> mockup of the chat interface running on placeholder data: it doesn't send messages or load real usage yet.
 > The roadmap is tracked in [GitHub issues](https://github.com/RyanCaudill04/ai-gateway/issues), grouped by [milestone](https://github.com/RyanCaudill04/ai-gateway/milestones).
 
 ## How it fits together
