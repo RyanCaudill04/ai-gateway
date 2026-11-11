@@ -62,7 +62,7 @@ func newAccessVerifier(issuer, certsURL, audience string, emails []string) *Acce
 func (v *AccessVerifier) Authenticate(r *http.Request) (Identity, error) {
 	raw := r.Header.Get(accessHeader)
 	if raw == "" {
-		return Identity{}, fmt.Errorf("%w: no %s header", ErrUnauthenticated, accessHeader)
+		return Identity{}, ErrNoCredentials
 	}
 
 	var claims accessClaims
@@ -71,7 +71,7 @@ func (v *AccessVerifier) Authenticate(r *http.Request) (Identity, error) {
 		if kid == "" {
 			return nil, errors.New("token has no key id")
 		}
-		return v.keys.get(r.Context(), kid)
+		return v.keys.get(kid)
 	})
 	if err != nil {
 		return Identity{}, fmt.Errorf("%w: %v", ErrUnauthenticated, err)
