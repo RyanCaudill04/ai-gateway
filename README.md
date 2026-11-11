@@ -4,7 +4,7 @@ A self-hosted, OpenAI-compatible gateway that spreads requests across free-tier 
 (Groq, Gemini, OpenRouter, Workers AI, …) with automatic fallback, falls back to
 local models via Ollama, and includes a chat UI that shows the usage left for each provider and model.
 
-> **Status:** early setup. The router only serves a health check (`GET /api/health`). The UI is a
+> **Status:** early setup. The router serves a health check (`GET /api/health`) and, behind sign-in, `GET /api/me`. The UI is a
 > mockup of the chat interface running on placeholder data: it doesn't send messages or load real usage yet.
 > The roadmap is tracked in [GitHub issues](https://github.com/RyanCaudill04/ai-gateway/issues), grouped by [milestone](https://github.com/RyanCaudill04/ai-gateway/milestones).
 
@@ -86,6 +86,35 @@ Public access through a Cloudflare Tunnel (no ports opened on the host):
    ```bash
    curl https://ai.example.com/api/health
    ```
+
+## Authentication
+Every router endpoint except the health checks (`GET /api/health`, and the internal `/healthz`)
+requires a signed-in caller. That includes paths that don't exist: an anonymous request gets `401`, not `404`.
+
+Sign-in is handled by [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/).
+Access adds a signed token (`Cf-Access-Jwt-Assertion`) to each request it lets through, and the router
+verifies it on every request: signature (against your team's public keys), issuer, audience, expiry,
+and that the email is in `AUTH_ALLOWED_EMAILS`. A request that reaches the router without passing
+through Cloudflare (for example on the LAN port) has no valid token and is refused.
+
+1. In **Zero Trust → Access → Applications**, add a **Self-hosted** application for your hostname with a
+   policy that allows only your email.
+2. Copy the application's **AUD tag** and your team domain into `.env`:
+   ```
+   CF_ACCESS_TEAM_DOMAIN=myteam.cloudflareaccess.com
+   CF_ACCESS_AUD=<aud tag>
+   AUTH_ALLOWED_EMAILS=you@example.com
+   ```
+3. Restart the router: `docker compose up -d router`. Its log line `auth: Cloudflare Access` confirms the settings loaded.
+
+| Response | Meaning |
+|----------|---------|
+| `401` | No token, or one that didn't verify |
+| `403` | A genuine token for an email that isn't allowed |
+| `503` `auth_not_configured` | The settings above are missing or invalid; the reason is in `docker compose logs router` |
+
+For local development without Cloudflare, set `AUTH_MODE=none`. That turns authentication off entirely,
+so only use it on your own machine.
 
 ## Updating
 Prebuilt images:
