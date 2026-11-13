@@ -1,20 +1,18 @@
-# Copy to config/providers.yaml and edit. API keys are NOT stored here —
-# each provider names the environment variable that holds its key (see .env.example).
-#
-# DRAFT: the router doesn't read this yet, and the shape may change.
+# Copy to config/providers.yaml and edit. API keys are NOT stored here or in .env:
+# register them with `docker compose exec router /router providers set-key <provider>` (#40).
+# A provider is enabled when it has a registered key, or has `local: true`.
+# ${VAR} in base_url is filled from the environment; an unset variable stops startup.
 # Model IDs change often. Check each provider's model list before using these.
 
 providers:
   groq:
     base_url: https://api.groq.com/openai/v1
-    api_key_env: GROQ_API_KEY
     models:
       - id: llama-3.3-70b-versatile
         context_length: 131072
 
   gemini:
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
-    api_key_env: GEMINI_API_KEY
     models:
       - id: gemini-2.5-flash
         context_length: 1048576
