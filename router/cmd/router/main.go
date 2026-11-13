@@ -19,10 +19,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
 )
 
 func main() {
@@ -45,9 +47,25 @@ func main() {
 // run starts the HTTP server and blocks until it fails or gets SIGINT/SIGTERM
 // (what `docker compose stop` sends), then shuts down gracefully.
 func run(addr string) error {
+	dbPath := envOr("DATABASE_PATH", "/data/gateway.db")
+
+	// Lock first: a second router on the same data dir must exit before it
+	// touches the database.
+	lock, err := store.AcquireLock(filepath.Join(filepath.Dir(dbPath), "router.lock"))
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
+	db, err := store.Open(context.Background(), dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(newAuthenticator()),
+		Handler:           newHandler(newAuthenticator(), db),
 		ReadHeaderTimeout: 10 * time.Second,
 		// No WriteTimeout on purpose: streamed completions can run for minutes.
 	}
@@ -79,16 +97,26 @@ func run(addr string) error {
 	return nil
 }
 
+// pinger is the part of the store /healthz needs. nil skips the check (tests).
+type pinger interface{ Ping(context.Context) error }
+
 // newHandler builds the router's routes. Access is deny-by-default: the only
 // public routes are the two health checks registered by name below. Every
 // other path, including ones that don't exist yet, goes through authn first,
 // so a new endpoint can't be left open by forgetting to protect it.
-func newHandler(authn auth.Authenticator) http.Handler {
+func newHandler(authn auth.Authenticator, db pinger) http.Handler {
 	mux := http.NewServeMux()
 
 	// Internal only: Caddy forwards /v1/* and /api/* unchanged, so this
 	// path isn't reachable from outside the compose network.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		if db != nil {
+			if err := db.Ping(r.Context()); err != nil {
+				slog.Error("healthz: database check failed", "err", err)
+				http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+				return
+			}
+		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintln(w, "ok")
 	})

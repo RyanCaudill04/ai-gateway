@@ -28,7 +28,7 @@ func do(h http.Handler, method, path string, headers ...string) *httptest.Respon
 }
 
 func TestOnlyHealthChecksArePublic(t *testing.T) {
-	h := newHandler(denyAll{})
+	h := newHandler(denyAll{}, nil)
 
 	for _, path := range []string{"/healthz", "/api/health"} {
 		if w := do(h, "GET", path); w.Code != http.StatusOK {
@@ -54,7 +54,7 @@ func TestOnlyHealthChecksArePublic(t *testing.T) {
 }
 
 func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
-	h := newHandler(auth.Locked(errors.New("CF_ACCESS_AUD is empty")))
+	h := newHandler(auth.Locked(errors.New("CF_ACCESS_AUD is empty")), nil)
 
 	if w := do(h, "GET", "/api/health"); w.Code != http.StatusOK {
 		t.Errorf("GET /api/health = %d, want 200", w.Code)
@@ -69,7 +69,7 @@ func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
 }
 
 func TestAuthenticatedRequests(t *testing.T) {
-	h := newHandler(auth.Disabled())
+	h := newHandler(auth.Disabled(), nil)
 
 	w := do(h, "GET", "/api/me")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"email"`) {
