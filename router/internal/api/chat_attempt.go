@@ -17,23 +17,25 @@ type answer struct {
 	resp   *upstream.Response // non-streaming
 
 	stream *upstream.Stream // streaming; the writer must Close it
-	// first is the first event to forward, already read from stream, or nil
-	// when the stream ended without one. Reading it before answering is what
-	// makes "fall back only before the first token" possible: a stream that
-	// fails before producing anything is still an attempt error.
+	// first is the first event to forward, already read from stream. Reading
+	// it before answering is what makes "fall back only before the first
+	// token" possible: a stream that fails before producing anything is still
+	// an attempt error, and the client has seen nothing of it.
 	first []byte
 	// usage is token counts seen so far (from a hidden usage chunk read
 	// while looking for first), or nil.
 	usage *Usage
 }
 
-// attempt makes one call to one target. On success the answer is ready to
-// write and nothing has been sent to the client. On failure the error is an
-// *upstream.Error (the provider failed; another target might work) or the
-// context's error (the client went away); either way the client has been sent
-// nothing, so the caller can still answer with a normal error response or
-// try another target.
-func (h *chatHandler) attempt(ctx context.Context, t target, body []byte, stream bool) (*answer, error) {
+// upstreamRequest builds the call to t. It is the only place a request to a
+// provider is put together, so a rule about where a request may go has one
+// place to stand.
+//
+// It fails, without calling anyone, when t's provider needs a key and none is
+// registered: the provider was enabled when the model was resolved but its
+// key has gone since (or the key lookup isn't wired). That is reported like a
+// provider failure, so a route moves on to its next entry.
+func (h *chatHandler) upstreamRequest(t target, body []byte) (upstream.Request, *upstream.Error) {
 	req := upstream.Request{
 		Provider: t.provider.Name,
 		BaseURL:  t.provider.BaseURL,
@@ -43,55 +45,65 @@ func (h *chatHandler) attempt(ctx context.Context, t target, body []byte, stream
 	if !t.provider.Local {
 		key, ok := h.Key(t.provider.Name)
 		if !ok {
-			// The provider was enabled when resolved but its key is gone (or
-			// the key lookup isn't wired yet). Reported like a provider
-			// failure, so fallback moves on; no call was made, so the
-			// observer is not told.
-			return nil, &upstream.Error{Kind: upstream.KindProvider, Provider: req.Provider, Model: req.Model,
+			return req, &upstream.Error{Kind: upstream.KindProvider, Provider: req.Provider, Model: req.Model,
 				Message: "no API key is registered for this provider"}
 		}
 		req.APIKey = key
 	}
+	return req, nil
+}
 
+// attempt makes one call to one target. On success the answer is ready to
+// write and nothing has been sent to the client. On failure the error is an
+// *upstream.Error (the provider failed; another target might work) or the
+// context's error (the client went away); either way the client has been sent
+// nothing, so the caller can still answer with a normal error response or
+// try another target.
+//
+// The rate-limit tracker is told the outcome before attempt returns, so the
+// caller can ask it straight away what it knows about a failure.
+func (h *chatHandler) attempt(ctx context.Context, t target, req upstream.Request, stream bool) (*answer, error) {
 	if !stream {
 		resp, err := h.Client.Complete(ctx, req)
 		if err != nil {
-			h.observeErr(t, err)
+			h.observeErr(err)
 			return nil, err
 		}
-		h.Observer.ObserveUpstream(req.Provider, req.Model, resp.Header, nil)
+		h.Limits.Observe(req.Provider, req.Model, resp.Header, h.Now())
 		return &answer{target: t, resp: resp}, nil
 	}
 
 	s, err := h.Client.Stream(ctx, req)
 	if err != nil {
-		h.observeErr(t, err)
+		h.observeErr(err)
 		return nil, err
 	}
-	h.Observer.ObserveUpstream(req.Provider, req.Model, s.Header, nil)
+	h.Limits.Observe(req.Provider, req.Model, s.Header, h.Now())
 
-	ans := &answer{target: t, stream: s}
 	first, usage, err := nextEvent(s)
-	ans.usage = usage
-	switch {
-	case err == io.EOF:
-		// An empty but well-formed stream: the writer sends just [DONE].
-		return ans, nil
-	case err != nil:
+	if err == io.EOF {
+		// A 200 that ends without a single chunk is not an answer: a real
+		// completion always has at least one. It is treated like the
+		// connection dropping before the first event, so a route can still
+		// fall back instead of handing the client an empty reply.
+		err = &upstream.Error{Kind: upstream.KindProvider, Provider: req.Provider, Model: req.Model,
+			Status: s.Status, InStream: true, Header: s.Header,
+			Message: "the provider ended the stream without sending anything"}
+	}
+	if err != nil {
 		s.Close()
-		h.observeErr(t, err)
+		h.observeErr(err)
 		return nil, err
 	}
-	ans.first = first
-	return ans, nil
+	return &answer{target: t, stream: s, first: first, usage: usage}, nil
 }
 
-// observeErr passes a provider failure to the observer. A client hanging up
-// is not the provider's doing, so it isn't passed on.
-func (h *chatHandler) observeErr(t target, err error) {
+// observeErr passes a provider failure to the rate-limit tracker. A client
+// hanging up is not the provider's doing, so it isn't passed on.
+func (h *chatHandler) observeErr(err error) {
 	var ue *upstream.Error
 	if errors.As(err, &ue) {
-		h.Observer.ObserveUpstream(t.provider.Name, t.model.ID, ue.Header, ue)
+		h.Limits.ObserveError(ue, h.Now())
 	}
 }
 

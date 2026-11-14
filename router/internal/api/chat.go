@@ -25,20 +25,6 @@ const MaxChatBody = 20 << 20
 // runs, #40) and never for local providers, which need no key.
 type KeyFunc func(provider string) (key string, ok bool)
 
-// UpstreamObserver sees the outcome of every call to a provider, so the
-// rate-limit tracker (#16) can read x-ratelimit-* headers and notice 429s.
-// model is the provider's own model ID. On success err is nil and h holds the
-// response headers; on failure err is the provider's error and h is
-// err.Header (nil when no response arrived). A streamed call can be observed
-// twice: once when its headers arrive, and again if it then fails inside the
-// stream. A client hanging up is not observed: it says nothing about the
-// provider.
-//
-// It runs on the request's goroutine, so it must be quick.
-type UpstreamObserver interface {
-	ObserveUpstream(provider, model string, h http.Header, err *upstream.Error)
-}
-
 // Usage is the token counts a provider reported for one request.
 type Usage struct {
 	PromptTokens     int
@@ -50,7 +36,7 @@ type Usage struct {
 // the request body except the requested model name.
 type RequestSummary struct {
 	RequestedModel string // the client's `model`, e.g. "fast" or "groq/llama-3.3-70b-versatile"
-	Provider       string // provider used (or last attempted); "" if none was resolved
+	Provider       string // provider that answered, or was called last; "" if none was called
 	Model          string // that provider's own model ID
 	Stream         bool
 	// Status is the HTTP status sent to the client, or StatusClientClosed when
@@ -64,9 +50,15 @@ type RequestSummary struct {
 	ClientGone bool
 	Usage      *Usage // nil when the provider didn't report token counts
 	Latency    time.Duration
-	// Attempts is how many providers were called: 1 until fallback (#11), 0
-	// when the request failed before any provider was tried.
+	// Attempts is how many upstream requests were made: 1 when the first
+	// provider answered, more after fallback, 0 when the request failed before
+	// any provider was called (bad request, or every entry skipped).
 	Attempts int
+	// Fallback lists the route entries that did not answer, in the order they
+	// were tried: the same list as the x-router-fallback header. Empty when
+	// the first entry answered, and always for a pinned model, whose one
+	// failure is ErrorType.
+	Fallback []FallbackAttempt
 }
 
 // StatusClientClosed is RequestSummary.Status for a client that disconnected
@@ -85,10 +77,18 @@ type ChatDeps struct {
 	// Key looks up provider API keys. nil means no keys, so only local
 	// providers can answer.
 	Key KeyFunc
-	// Observer sees every upstream outcome (#16). nil: ignored.
-	Observer UpstreamObserver
+	// Limits is the rate-limit tracker (#16): it is told about every upstream
+	// response and failure, and asked which models are out of quota. nil:
+	// nothing is tracked and no model ever counts as exhausted.
+	Limits LimitTracker
 	// OnSummary receives each request's summary (#15). nil: ignored.
 	OnSummary SummaryFunc
+	// RouteBudget is how long a virtual model may keep starting new attempts
+	// (see DefaultRouteBudget). Zero or less: the default.
+	RouteBudget time.Duration
+	// Now is the clock for rate-limit windows. nil: time.Now. Tests set it to
+	// move past a reset without waiting.
+	Now func() time.Time
 }
 
 type chatHandler struct {
@@ -97,29 +97,34 @@ type chatHandler struct {
 
 // Chat serves POST /v1/chat/completions in OpenAI's format, streaming and not.
 //
-// A request goes through three separate steps, so fallback (#11) only has to
-// change the middle one:
+// A request goes through four separate steps. Only the last one writes to the
+// client, which is what makes fallback safe: until a provider has produced
+// something to send, the client has seen nothing and another can be tried.
 //
 //  1. resolve: `model` → an ordered list of targets (chat_resolve.go)
-//  2. attempt: one call to one target, returning a ready response or an error
-//     before anything is written to the client (chat_attempt.go)
-//  3. write: send the ready response, streaming or not (chat_write.go)
+//  2. dispatch: find a target that answers. A pinned model gets one attempt,
+//     a virtual model tries its entries in order (chat_fallback.go)
+//  3. attempt: one call to one target, returning a ready response or an error
+//     (chat_attempt.go)
+//  4. write: send the ready response, streaming or not (chat_write.go)
 func Chat(d ChatDeps) http.Handler {
 	if d.Key == nil {
 		d.Key = func(string) (string, bool) { return "", false }
 	}
-	if d.Observer == nil {
-		d.Observer = nopObserver{}
+	if d.Limits == nil {
+		d.Limits = noLimits{}
 	}
 	if d.OnSummary == nil {
 		d.OnSummary = func(RequestSummary) {}
 	}
+	if d.RouteBudget <= 0 {
+		d.RouteBudget = DefaultRouteBudget
+	}
+	if d.Now == nil {
+		d.Now = time.Now
+	}
 	return &chatHandler{d}
 }
-
-type nopObserver struct{}
-
-func (nopObserver) ObserveUpstream(string, string, http.Header, *upstream.Error) {}
 
 // chatRequest is the part of the body the router itself reads. Everything
 // else is forwarded untouched; the provider validates it.
@@ -137,7 +142,8 @@ func (h *chatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("chat completion", "requested_model", sum.RequestedModel,
 			"provider", sum.Provider, "model", sum.Model, "stream", sum.Stream,
 			"status", sum.Status, "error_type", sum.ErrorType, "client_gone", sum.ClientGone,
-			"attempts", sum.Attempts, "latency_ms", sum.Latency.Milliseconds())
+			"attempts", sum.Attempts, "fallback", FallbackHeader(sum.Fallback),
+			"latency_ms", sum.Latency.Milliseconds())
 		h.OnSummary(*sum)
 	}()
 
@@ -159,26 +165,26 @@ func (h *chatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ---- Fallback (#11) goes here. ----
-	// Today only the first enabled target is called. #11 turns this into a
-	// loop over res.targets (unless res.pinned): attempt each in order, and on
-	// an *upstream.Error that warrants it, record the attempt and try the
-	// next. That is safe because attempt writes nothing to the client; the
-	// first byte goes out in writeJSON/writeStream, after the loop.
-	t := res.targets[0]
-	setRouterHeaders(w, t, sum)
-	sum.Attempts++
-	ans, err := h.attempt(r.Context(), t, body, req.Stream)
-	if err != nil {
-		h.attemptFailed(w, r, err, sum)
-		return
-	}
-	// ---- End of the part #11 changes. ----
-
-	if req.Stream {
-		h.writeStream(w, r, ans, sum)
-	} else {
-		writeJSON(w, ans, sum)
+	// Find a provider that answers. Nothing is written to the client in
+	// here, so the headers describe sets go out before the status line, for a
+	// stream as much as for a JSON body.
+	out := h.dispatch(r.Context(), res, body, req.Stream)
+	out.describe(w, sum)
+	switch {
+	case out.gone:
+		// The client hung up while a provider was being found: there is
+		// nobody left to answer.
+		sum.Status, sum.ClientGone = StatusClientClosed, true
+	case out.err != nil:
+		if !res.pinned {
+			slog.Warn("chat: no provider answered", "requested_model", req.Model,
+				"error_type", out.err.Type, "calls", out.calls, "not_answered", len(out.failed))
+		}
+		writeError(w, out.err, sum)
+	case req.Stream:
+		h.writeStream(w, r, out.answer, sum)
+	default:
+		writeJSON(w, out.answer, sum)
 	}
 }
 
@@ -217,35 +223,13 @@ func readChatRequest(w http.ResponseWriter, r *http.Request) ([]byte, chatReques
 }
 
 // setRouterHeaders names the provider and model that answered (or were
-// attempted), on success and error alike. x-router-model is the provider's
+// called last), on success and error alike. x-router-model is the provider's
 // own model ID, matching the `model` field of an error body; together they
 // make the pinned ID provider + "/" + model.
 func setRouterHeaders(w http.ResponseWriter, t target, sum *RequestSummary) {
 	w.Header().Set("X-Router-Provider", t.provider.Name)
 	w.Header().Set("X-Router-Model", t.model.ID)
 	sum.Provider, sum.Model = t.provider.Name, t.model.ID
-}
-
-// attemptFailed answers a failed attempt. Nothing has been written yet, so
-// the client gets a normal error response with the right status.
-func (h *chatHandler) attemptFailed(w http.ResponseWriter, r *http.Request, err error, sum *RequestSummary) {
-	if clientGone(r.Context(), err) {
-		sum.Status, sum.ClientGone = StatusClientClosed, true
-		return
-	}
-	var ue *upstream.Error
-	if !errors.As(err, &ue) {
-		// attempt only returns *upstream.Error or the context's error; this
-		// is a safety net, not an expected path.
-		slog.Error("chat: unexpected attempt error", "provider", sum.Provider, "model", sum.Model, "err", err)
-		writeError(w, apierror.ProviderError(sum.Provider, sum.Model, ""), sum)
-		return
-	}
-	slog.Warn("chat: provider failed", "provider", ue.Provider, "model", ue.Model,
-		"kind", ue.Kind, "status", ue.Status, "message", ue.Message)
-	// LimitHint (which counter ran out) comes from the rate-limit tracker
-	// once it exists (#16).
-	writeError(w, apierror.FromUpstream(ue, apierror.LimitHint{}), sum)
 }
 
 // clientGone tells "the client hung up" from a real failure. The upstream

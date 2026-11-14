@@ -144,6 +144,7 @@ func run(addr string) error {
 		enabled:     enabled,
 		upstream:    upstream.New(upstream.Options{}),
 		providerKey: keys.Get,
+		limits:      limits,
 	})
 	srv := &http.Server{
 		Addr:              addr,
@@ -205,10 +206,10 @@ type handlerDeps struct {
 	cfg     *config.Config
 	enabled api.EnabledFunc
 
-	upstream    *upstream.Client     // nil: a client with the default timeouts
-	providerKey api.KeyFunc          // provider API keys (#40); nil: none
-	observer    api.UpstreamObserver // rate-limit tracker (#16); nil: none
-	onSummary   api.SummaryFunc      // request log (#15); nil: none
+	upstream    *upstream.Client // nil: a client with the default timeouts
+	providerKey api.KeyFunc      // provider API keys (#40); nil: none
+	limits      api.LimitTracker // rate-limit tracker (#16); nil: none
+	onSummary   api.SummaryFunc  // request log (#15); nil: none
 }
 
 // newHandler builds the router's routes. Access is deny-by-default: the only
@@ -261,7 +262,7 @@ func newHandler(d handlerDeps) http.Handler {
 		Enabled:   enabled,
 		Client:    d.upstream,
 		Key:       d.providerKey,
-		Observer:  d.observer,
+		Limits:    d.limits,
 		OnSummary: d.onSummary,
 	}))
 
