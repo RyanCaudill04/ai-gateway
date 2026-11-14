@@ -30,6 +30,23 @@ func ContextWithName(ctx context.Context, name string) context.Context {
 // tell a revoked key from a mistyped one; the log says which it was.
 const unauthorizedMessage = "A valid API key is required: send it as \"Authorization: Bearer <key>\"."
 
+// Uncounted reports whether r is a read that must not count toward the daily
+// cap, and must still be answered when the key is at its cap: GET /v1/usage.
+//
+// The usage endpoint exists to show the key's own count. A dashboard polls it
+// (after every reply and whenever the model picker opens), so counting it
+// would make the display eat the quota it is displaying. And a key that has
+// used up its day is exactly when someone opens the dashboard to see why, so
+// it must still be able to read its own usage. It is a pure read with no
+// upstream call, so letting it through costs the providers nothing.
+//
+// This is the only exemption, matched on method and exact path. It never
+// skips the key check: unknown, revoked and malformed keys are refused as
+// usual. Anything else (HEAD included, and every other /v1 path) counts.
+func Uncounted(r *http.Request) bool {
+	return r.Method == http.MethodGet && r.URL.Path == "/v1/usage"
+}
+
 // Require lets a request through to next only with an active key under its
 // daily cap, and counts it. Every request that reaches next has been counted,
 // whatever it turns out to be (a chat, a model list, an unknown path):
@@ -41,6 +58,10 @@ const unauthorizedMessage = "A valid API key is required: send it as \"Authoriza
 //   - over the cap: 429 rate_limited (limit_type requests, window day,
 //     resets_at next midnight UTC, Retry-After), not counted
 //
+// The one exception is GET /v1/usage (see Uncounted): it needs a valid key
+// like everything else, but is neither counted nor refused for being over the
+// cap.
+//
 // It checks nothing else: not Cloudflare Access, not CSRF (see main.go).
 func Require(s *Store, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +70,7 @@ func Require(s *Store, next http.Handler) http.Handler {
 			reject(w, r, reason, "")
 			return
 		}
-		v, info, resetsAt := s.admit(Hash(token))
+		v, info, resetsAt := s.admit(Hash(token), !Uncounted(r))
 		switch v {
 		case unknownKey:
 			reject(w, r, "unknown key", "")

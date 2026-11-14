@@ -176,6 +176,13 @@ func run(addr string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	// Built here, before the handler, because GET /v1/usage reads its health
+	// checks. New starts nothing; Start is called below, once the servers run.
+	usage := poller.New(poller.Deps{
+		Config: cfg, Tracker: limits, Completer: upstream.New(upstream.Options{}),
+		Key: keys.Get, Enabled: enabled,
+	}, poller.Options{Interval: pollInterval})
+
 	handler := newHandler(handlerDeps{
 		authn:       newAuthenticator(),
 		db:          db,
@@ -185,6 +192,7 @@ func run(addr string) error {
 		providerKey: keys.Get,
 		apiKeys:     apiKeys,
 		limits:      limits,
+		health:      usage,
 		onSummary:   reqLog.OnSummary,
 	})
 	srv := &http.Server{
@@ -210,10 +218,6 @@ func run(addr string) error {
 
 	// Started last, once both servers are going, and stopped (deferred after
 	// the tracker's, so it runs first) before the tracker flushes its results.
-	usage := poller.New(poller.Deps{
-		Config: cfg, Tracker: limits, Completer: upstream.New(upstream.Options{}),
-		Key: keys.Get, Enabled: enabled,
-	}, poller.Options{Interval: pollInterval})
 	usage.Start(ctx)
 	defer func() {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -265,7 +269,8 @@ type handlerDeps struct {
 
 	upstream    *upstream.Client // nil: a client with the default timeouts
 	providerKey api.KeyFunc      // provider API keys (#40); nil: none
-	limits      api.LimitTracker // rate-limit tracker (#16); nil: none
+	limits      api.UsageTracker // rate-limit tracker (#16); nil: none
+	health      api.HealthSource // local providers' health checks, from the poller; nil: none
 	onSummary   api.SummaryFunc  // request log (#15); nil: none
 }
 
@@ -323,6 +328,12 @@ func newHandler(d handlerDeps) http.Handler {
 	// Everything registered on this mux requires a valid service API key.
 	v1 := http.NewServeMux()
 	v1.Handle("GET /v1/models", api.Models(cfg, enabled))
+	// Read-only; apikeys.Require checks the key but does not count this
+	// request toward the daily cap (apikeys.Uncounted), so a dashboard left
+	// open can't use up the quota it displays.
+	v1.Handle("GET /v1/usage", api.UsageHandler(api.UsageDeps{
+		Config: cfg, Enabled: enabled, Limits: d.limits, Health: d.health, Keys: keys,
+	}))
 	v1.Handle("POST /v1/chat/completions", api.Chat(api.ChatDeps{
 		Config:    cfg,
 		Enabled:   enabled,

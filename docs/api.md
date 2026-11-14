@@ -45,7 +45,9 @@ WWW-Authenticate: Bearer realm="ai-gateway"
 
 A key may have a daily request cap. Every request that a valid key makes to
 `/v1/*` counts, whatever the endpoint (so `GET /v1/models` counts as much as a
-chat completion). Requests refused for being over the cap don't count. The day
+chat completion), with one exception: `GET /v1/usage` is not counted and is
+answered even when the key is over its cap (see [Usage](#get-v1usage)).
+Requests refused for being over the cap don't count. The day
 is the UTC day: the count goes back to 0 at midnight UTC. Over the cap:
 
 ```
@@ -116,6 +118,303 @@ with extra fields for the UI.
   ]
 }
 ```
+
+## GET /v1/usage
+
+How much of each provider's free tier is left, for the UI's usage bars and
+model picker. A read-only view of what the router already knows: the
+rate-limit windows it recorded from provider responses and from the usage
+poller, the poller's health check of local providers, and the calling key's
+own cap. It sends nothing to any provider, so calling it costs no quota, and
+the answer carries `Cache-Control: no-store`. Only `GET` is allowed.
+
+**It does not count toward the calling key's daily cap**, and a key that is
+over its cap can still call it. The UI polls this endpoint (after every reply
+and when the picker opens), and counting those polls would let a dashboard
+left open use up the quota it is displaying; an over-cap key is exactly the
+one that needs to see why it is refused. This is the only endpoint with that
+exemption, it needs a valid key like every other, and `HEAD` or any other
+path still counts.
+
+All times are UTC RFC 3339 with whole seconds (like `resets_at` in errors).
+Every field is always present; where a value does not apply it is `null`
+(or `[]` for a list) rather than missing. Exceptions are marked below.
+
+```json
+{
+  "object": "usage",
+  "now": "2026-11-14T12:00:00Z",
+  "key": {
+    "name": "chat-ui",
+    "daily_cap": 1000,
+    "used_today": 37,
+    "remaining": 963,
+    "resets_at": "2026-11-15T00:00:00Z"
+  },
+  "routes": [
+    {
+      "id": "fast",
+      "status": "available",
+      "next": { "id": "groq/openai/gpt-oss-20b", "provider": "groq", "model": "openai/gpt-oss-20b" },
+      "resets_at": null
+    },
+    {
+      "id": "long-context",
+      "status": "exhausted",
+      "next": null,
+      "resets_at": "2026-11-14T12:05:00Z"
+    },
+    {
+      "id": "private",
+      "status": "available",
+      "next": { "id": "ollama/llama3.2:3b", "provider": "ollama", "model": "llama3.2:3b" },
+      "resets_at": null
+    }
+  ],
+  "providers": [
+    {
+      "provider": "gemini",
+      "local": false,
+      "enabled": true,
+      "status": "unknown",
+      "models": [
+        {
+          "id": "gemini/3.5-flash-lite",
+          "model": "3.5-flash-lite",
+          "context_length": 1048576,
+          "status": "unknown",
+          "exhausted": false,
+          "resets_at": null,
+          "observed_at": null,
+          "windows": []
+        }
+      ]
+    },
+    {
+      "provider": "groq",
+      "local": false,
+      "enabled": true,
+      "status": "known",
+      "models": [
+        {
+          "id": "groq/openai/gpt-oss-20b",
+          "model": "openai/gpt-oss-20b",
+          "context_length": 131072,
+          "status": "known",
+          "exhausted": false,
+          "resets_at": null,
+          "observed_at": "2026-11-14T11:58:12Z",
+          "windows": [
+            { "kind": "requests", "window": "minute", "remaining": 21, "limit": 30,
+              "resets_at": "2026-11-14T12:00:42Z", "checked_at": "2026-11-14T11:58:12Z",
+              "exhausted": false, "reset": false },
+            { "kind": "requests", "window": "day", "remaining": 580, "limit": 1000,
+              "resets_at": "2026-11-15T00:00:00Z", "checked_at": "2026-11-14T11:58:12Z",
+              "exhausted": false, "reset": false },
+            { "kind": "tokens", "window": "minute", "remaining": 6000, "limit": 6000,
+              "resets_at": null, "checked_at": "2026-11-14T11:30:00Z",
+              "exhausted": false, "reset": true },
+            { "kind": "tokens", "window": "day", "remaining": 130000, "limit": 200000,
+              "resets_at": "2026-11-15T00:00:00Z", "checked_at": "2026-11-14T11:58:12Z",
+              "exhausted": false, "reset": false }
+          ]
+        },
+        {
+          "id": "groq/openai/gpt-oss-120b",
+          "model": "openai/gpt-oss-120b",
+          "context_length": 131072,
+          "status": "known",
+          "exhausted": true,
+          "limit_type": "requests",
+          "window": "day",
+          "resets_at": "2026-11-15T00:00:00Z",
+          "observed_at": "2026-11-14T11:59:30Z",
+          "windows": [
+            { "kind": "requests", "window": "day", "remaining": 0, "limit": 1000,
+              "resets_at": "2026-11-15T00:00:00Z", "checked_at": "2026-11-14T11:59:30Z",
+              "exhausted": true, "reset": false }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "local": true,
+      "enabled": true,
+      "status": "unlimited",
+      "health": { "online": true, "checked_at": "2026-11-14T11:50:00Z" },
+      "models": [
+        {
+          "id": "ollama/llama3.2:3b",
+          "model": "llama3.2:3b",
+          "context_length": 131072,
+          "status": "unlimited",
+          "exhausted": false,
+          "resets_at": null,
+          "observed_at": null,
+          "windows": []
+        }
+      ]
+    },
+    {
+      "provider": "openrouter",
+      "local": false,
+      "enabled": false,
+      "status": "disabled",
+      "models": [
+        {
+          "id": "openrouter/gemma-4-26b:free",
+          "model": "gemma-4-26b:free",
+          "context_length": 262144,
+          "status": "disabled",
+          "exhausted": false,
+          "resets_at": null,
+          "observed_at": null,
+          "windows": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+The example is trimmed (a real answer lists every configured model).
+
+### Top level
+
+| Field | Meaning |
+|-------|---------|
+| `object` | Always `"usage"`. |
+| `now` | The router's clock when it answered. Compute "resets in 42s" and "updated 3 min ago" against this, not the browser's clock, so the two can't disagree. |
+| `key` | The calling key (below), or `null` if the key store has no such key. |
+| `routes` | One entry per virtual model, sorted by `id`. |
+| `providers` | One entry per configured provider, sorted by name. |
+
+The numbers are the router's *global* view: remaining usage is shared by every
+service that uses the providers. `key` is the caller's own daily cap, separate
+from them.
+
+### `key`
+
+| Field | Meaning |
+|-------|---------|
+| `name` | The key's name (the calling service). |
+| `daily_cap` | Requests per UTC day, or `null` for no cap. |
+| `used_today` | Requests counted today. Reads of this endpoint are not counted. |
+| `remaining` | `daily_cap - used_today`, never below 0; `null` for no cap. |
+| `resets_at` | Next midnight UTC, when `used_today` goes back to 0. |
+
+### `routes[]`
+
+The "Auto" entries of the picker. Every route is listed, including ones
+`/v1/models` leaves out because no provider is enabled.
+
+| Field | Meaning |
+|-------|---------|
+| `id` | The route name: the `model` to send (`fast`, `long-context`, `private`, ...). |
+| `status` | `available`: a request sent now would try `next` first. `exhausted`: every enabled entry is known to be out of quota. `unavailable`: no entry has an enabled provider (no key registered). |
+| `next` | The entry Auto would use now, or `null` unless `status` is `available`. `id` is the `provider/model` id; `provider` and `model` are its parts. Look it up in `providers` (same `id`) for the bars to show under an Auto model. |
+| `resets_at` | Only when `exhausted`: when the soonest entry is usable again (the earliest reset among the exhausted entries). `null` otherwise. |
+
+`next` is computed with the same two checks the chat handler makes before it
+tries an entry (provider enabled, model not known to be out of quota), so it is
+what a request sent right now would call first. It is a prediction: the call
+can still fail, and a prompt too long for that entry is only found out by
+asking. Providers that report nothing are never skipped here, only after a
+real 429.
+
+### `providers[]` and `models[]`
+
+Every provider in `config/providers.yaml` is listed, with its models in the
+config's order.
+
+**Disabled providers are listed**, with `enabled: false` and `status:
+"disabled"`, where `/v1/models` leaves them out. `/v1/models` says what a
+client may send, so it hides what would fail. This endpoint says what state
+things are in: the picker shows unavailable providers greyed out, and a
+missing provider could not tell "no key registered yet" from "misspelled in the
+config". A disabled model has no windows (anything recorded before the key was
+removed is not reported), and `exhausted` is `false`.
+
+| Field | Meaning |
+|-------|---------|
+| `provider` | Provider name. |
+| `local` | `true` if requests never leave this machine (Ollama). |
+| `enabled` | `true` if the provider can be used now: local, or a key is registered. |
+| `status` | `disabled` (not enabled), `unlimited` (local), `known` (at least one of its models has reported windows), `unknown` (none has). |
+| `health` | Local providers only (the field is absent otherwise). See below. |
+| `models` | The provider's models. |
+
+`health` has `online` (`true`/`false`) and `checked_at`, from the usage
+poller's health check. Before the first check has run (the poller waits one
+interval-tick after the router starts, and is off with
+`USAGE_POLL_INTERVAL=off`) both are `null`: show "checking", not "offline".
+
+| Model field | Meaning |
+|-------------|---------|
+| `id` | `provider/model`, the same id as `/v1/models`. |
+| `model` | The provider's own id for the model. |
+| `context_length` | Largest prompt in tokens. |
+| `status` | `known`: the provider has reported at least one window. `unknown`: it has reported none, either because it never does (Gemini, Workers AI) or because the model has not been used or probed yet: show "Usage remaining unknown" and no bars. `unlimited`: local, no quota: show "Unlimited (local)" and the provider's `health`. `disabled`: see above. |
+| `exhausted` | `true` if the router knows the model is out of quota right now and skips it. This is what the picker greys out. |
+| `limit_type`, `window` | Only when `exhausted` (absent otherwise): which limit is used up, as `requests`/`tokens` and `minute`/`day`. If several are, the one that lasts longest. |
+| `resets_at` | When an exhausted model is usable again; `null` if not exhausted. |
+| `observed_at` | The last time the router saw a response from this model, with or without rate-limit headers; `null` if never. |
+| `windows` | The reported limit windows, `[]` when `status` is not `known`. Ordered requests/minute, requests/day, tokens/minute, tokens/day (only those the provider reported). |
+
+A model can be `exhausted` without being `known`: after a 429 the router backs
+off for the time the provider asked (one minute if it said nothing), and that
+shows up as a requests window. Local models can be exhausted the same way.
+
+### `windows[]`: one bar
+
+| Field | Meaning |
+|-------|---------|
+| `kind` | `requests` or `tokens`. |
+| `window` | `minute` or `day`. |
+| `remaining` | What is left, or `null` if the provider did not report it (never `-1`). |
+| `limit` | The window's size, or `null` if not reported. |
+| `resets_at` | When the window is full again, or `null` if the provider did not say, or if `reset` is `true`. |
+| `checked_at` | When this window was last read from the provider (a response, or the poller). "Updated X ago" is `now - checked_at`. |
+| `exhausted` | `true` if this window is used up and `resets_at` is still ahead. A token window counts as used up below 100 tokens, since no real request fits. |
+| `reset` | `true` if the reset time passed since the reading. |
+
+Drawing a bar:
+
+- **% used** is `(limit - remaining) / limit` when both are present. When
+  either is `null` there is nothing to draw a percentage from: show the
+  number you have (for example "850 left") or nothing.
+- **A window that has reset** (`reset: true`) is known to be full again
+  without sending a probe, so `remaining` is already set to `limit` (or `null`
+  if the size was never reported; treat that as 0% used), and `resets_at` is
+  `null` because the next reset is not known until the next reading. Show it
+  as 0% used with no reset time. `checked_at` still tells how old the real
+  reading is.
+- **The bar closest to running out** is the one with the highest % used among
+  a model's windows (or any `exhausted` one).
+- **Resets in / at**: for a minute window show `resets_at - now` in seconds,
+  for a day window the time of day (a rolling reset time as the
+  provider reports it).
+
+### What the UI shows, and where it comes from
+
+| UI element | Field |
+|------------|-------|
+| One bar per window, per model | `windows[]` of that model |
+| % used | `limit`, `remaining` |
+| "resets in 42s" / "resets 00:00 UTC" | `resets_at` against `now` |
+| Per minute / per day, requests / tokens | `window`, `kind` |
+| Highlight the bar closest to running out | highest % used in `windows[]`, or `exhausted` |
+| Provider summary in the picker (tightest bar) | the tightest of its models' `windows[]` |
+| Auto models show the bars of the provider Auto would use next | `routes[].next.id`, looked up in `providers[].models[].id` |
+| Auto model with nothing usable | `routes[].status` `exhausted`/`unavailable`, `routes[].resets_at` |
+| Greyed out with a reset time | `models[].exhausted`, `models[].resets_at` |
+| "Usage remaining unknown" | `models[].status == "unknown"` |
+| "Unlimited (local)" and online/offline | `status == "unlimited"`, `providers[].health.online` |
+| "No key" / disabled | `enabled`, `status == "disabled"` |
+| "Updated 3 min ago" | `now - windows[].checked_at` |
+| Show as reset without a probe | `windows[].reset` |
+| The UI key's own cap, shown separately | `key` |
 
 ## POST /v1/chat/completions
 

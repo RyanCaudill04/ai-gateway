@@ -49,7 +49,8 @@ type Info struct {
 // (#17).
 type Usage struct {
 	DailyCap int64 // 0 = no cap
-	// Used is the requests admitted today (UTC), including the one asking.
+	// Used is the requests admitted today (UTC). A read of GET /v1/usage
+	// itself is not counted (see Uncounted), so it is not included.
 	Used int64
 	// ResetsAt is the next midnight UTC, when Used goes back to 0.
 	ResetsAt time.Time
@@ -192,7 +193,11 @@ const (
 
 // admit looks up a presented key's hash and, if it is active and under its
 // cap, counts the request. Checking and counting are one step under mu.
-func (s *Store) admit(hash [HashSize]byte) (verdict, Info, time.Time) {
+//
+// With count false (a free read, see Uncounted) the key is still looked up, so
+// an unknown or revoked key is refused, but nothing is counted and the cap is
+// not enforced: the request is admitted even from a key at its cap.
+func (s *Store) admit(hash [HashSize]byte, count bool) (verdict, Info, time.Time) {
 	now := s.now()
 	day := now.UTC().Format(dayFormat)
 
@@ -208,6 +213,12 @@ func (s *Store) admit(hash [HashSize]byte) (verdict, Info, time.Time) {
 		return revokedKey, info, time.Time{}
 	}
 	e.today(day)
+	if !count {
+		info := e.info
+		info.UsedToday = e.used
+		s.mu.Unlock()
+		return admitted, info, nextMidnight(now)
+	}
 	if e.info.DailyCap > 0 && e.used >= e.info.DailyCap {
 		info := e.info
 		info.UsedToday = e.used
