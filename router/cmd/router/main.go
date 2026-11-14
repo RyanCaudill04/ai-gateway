@@ -4,6 +4,7 @@
 //
 //	router              start the server (listens on LISTEN_ADDR, default ":8080")
 //	router healthcheck  exit 0 if the running server's /healthz returns 200, else 1
+//	router backup <path>  write a consistent copy of the database to <path> (VACUUM INTO)
 //
 // The healthcheck subcommand exists because the runtime image has no shell or
 // curl, so Docker's HEALTHCHECK runs this same binary as the HTTP client.
@@ -23,7 +24,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/RyanCaudill04/ai-gateway/router/internal/api"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
 )
 
@@ -33,6 +37,14 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		if err := healthcheck(addr); err != nil {
 			fmt.Fprintln(os.Stderr, "unhealthy:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		if err := backup(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "backup failed:", err)
 			os.Exit(1)
 		}
 		return
@@ -48,6 +60,16 @@ func main() {
 // (what `docker compose stop` sends), then shuts down gracefully.
 func run(addr string) error {
 	dbPath := envOr("DATABASE_PATH", "/data/gateway.db")
+
+	// A bad or missing providers file stops startup with the config package's
+	// error, which names each offending field.
+	cfg, err := config.LoadFile(envOr("PROVIDERS_CONFIG", "/config/providers.yaml"), os.Getenv, hasKey)
+	if err != nil {
+		return err
+	}
+	if disabled := cfg.DisabledProviders(); len(disabled) > 0 {
+		slog.Warn("providers disabled (no key registered)", "providers", disabled)
+	}
 
 	// Lock first: a second router on the same data dir must exit before it
 	// touches the database.
@@ -65,7 +87,7 @@ func run(addr string) error {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(newAuthenticator(), db),
+		Handler:           newHandler(newAuthenticator(), db, cfg, providerEnabled(cfg)),
 		ReadHeaderTimeout: 10 * time.Second,
 		// No WriteTimeout on purpose: streamed completions can run for minutes.
 	}
@@ -97,6 +119,23 @@ func run(addr string) error {
 	return nil
 }
 
+// hasKey is the one place that knows whether a provider has a registered API
+// key. Until provider key storage lands (#40) nothing can be registered, so
+// only local providers are enabled. #40 replaces this body with a lookup in
+// the key store; startup and the request-time check below both use it.
+func hasKey(provider string) bool { return false }
+
+// providerEnabled answers "can this provider be used right now?" and is called
+// on every request, not once at startup, so a key registered while the router
+// runs takes effect without a restart. It mirrors the rule the config package
+// applies at load time (local, or has a key).
+func providerEnabled(cfg *config.Config) api.EnabledFunc {
+	return func(name string) bool {
+		p := cfg.Providers[name]
+		return p != nil && (p.Local || hasKey(name))
+	}
+}
+
 // pinger is the part of the store /healthz needs. nil skips the check (tests).
 type pinger interface{ Ping(context.Context) error }
 
@@ -104,7 +143,7 @@ type pinger interface{ Ping(context.Context) error }
 // public routes are the two health checks registered by name below. Every
 // other path, including ones that don't exist yet, goes through authn first,
 // so a new endpoint can't be left open by forgetting to protect it.
-func newHandler(authn auth.Authenticator, db pinger) http.Handler {
+func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled api.EnabledFunc) http.Handler {
 	mux := http.NewServeMux()
 
 	// Internal only: Caddy forwards /v1/* and /api/* unchanged, so this
@@ -140,12 +179,17 @@ func newHandler(authn auth.Authenticator, db pinger) http.Handler {
 		json.NewEncoder(w).Encode(map[string]string{"email": id.Email})
 	})
 
+	protected.Handle("GET /v1/models", api.Models(cfg, enabled))
+
 	// The browser proves who it is with a cookie that it sends automatically,
 	// so another site could try to make it send requests here (CSRF). This
 	// rejects state-changing requests that a browser marks as cross-origin.
 	// Non-browser clients don't send those markers and are unaffected.
 	csrf := http.NewCrossOriginProtection()
-	mux.Handle("/", auth.Require(authn, csrf.Handler(protected)))
+	csrf.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apierror.Write(w, apierror.Forbidden("cross_origin_forbidden", "Cross-origin requests are not allowed."))
+	}))
+	mux.Handle("/", auth.Require(authn, csrf.Handler(apierror.Routes(protected))))
 
 	return mux
 }
