@@ -87,6 +87,9 @@ Local models with Ollama:
 docker compose --profile ollama up -d
 docker compose exec ollama ollama pull llama3.2:3b
 ```
+The `private` model only ever uses local providers (`local: true`), so its prompts never leave your
+network. The router won't start if `routes.private` lists anything else, and if Ollama is down the
+request fails instead of going to a cloud provider. See [docs/api.md](docs/api.md#the-private-route).
 
 Public access through a Cloudflare Tunnel (no ports opened on the host):
 1. In the Cloudflare dashboard, go to **Zero Trust → Networks → Tunnels** and create a

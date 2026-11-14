@@ -9,6 +9,9 @@ import (
 type target struct {
 	provider *config.Provider
 	model    config.Model
+	// localOnly marks a target of the private route. upstreamRequest checks it
+	// against the provider, as the last gate before anything leaves the router.
+	localOnly bool
 }
 
 // resolution is what a client's `model` means.
@@ -19,6 +22,10 @@ type resolution struct {
 	// pinned is true for a provider/model ID. Pinned requests never fall back
 	// (#11); routes do.
 	pinned bool
+	// localOnly is true for the private route: every target is local, and
+	// each carries the same mark (target.localOnly) down to upstreamRequest,
+	// which refuses to build a request to a provider that is not.
+	localOnly bool
 }
 
 // resolve turns the client's `model` into targets. A route name gives its
@@ -40,13 +47,13 @@ type resolution struct {
 // "does not exist" would send someone hunting for a typo.
 func resolve(cfg *config.Config, enabled EnabledFunc, model string) (resolution, *apierror.Error) {
 	if entries, ok := cfg.Routes[model]; ok {
-		var res resolution
+		res := resolution{localOnly: model == config.PrivateRoute}
 		for _, id := range entries {
 			p, m, ok := cfg.Lookup(id)
-			if !ok || !enabled(p.Name) {
+			if !ok || !enabled(p.Name) || !usableIn(model, p) {
 				continue
 			}
-			res.targets = append(res.targets, target{provider: p, model: m})
+			res.targets = append(res.targets, target{provider: p, model: m, localOnly: res.localOnly})
 		}
 		if len(res.targets) == 0 {
 			return res, apierror.Unavailable("no_enabled_provider",
@@ -67,4 +74,18 @@ func resolve(cfg *config.Config, enabled EnabledFunc, model string) (resolution,
 		return res, e
 	}
 	return res, nil
+}
+
+// usableIn reports whether a provider's models may serve the named route. Only
+// the private route restricts anything: it takes local providers and nothing
+// else. config.Parse already rejects a private route with a non-local entry;
+// this is the same rule applied again when the request is resolved, so a
+// config that never went through Parse (or a rule that was loosened by
+// mistake) still cannot put a remote provider in the private route's list.
+// The entry is dropped, never called.
+//
+// A route with any other name gets no such treatment, even if it happens to
+// hold only local providers.
+func usableIn(route string, p *config.Provider) bool {
+	return route != config.PrivateRoute || p.Local
 }

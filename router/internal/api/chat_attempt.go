@@ -6,9 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 
 	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
+
+// errLocalOnly is the cause carried by the last gate's refusal.
+var errLocalOnly = errors.New("local-only target is not a local provider")
 
 // answer is a provider's successful reply that nothing has been written for
 // yet. Exactly one of resp and stream is set.
@@ -31,11 +35,26 @@ type answer struct {
 // provider is put together, so a rule about where a request may go has one
 // place to stand.
 //
-// It fails, without calling anyone, when t's provider needs a key and none is
+// It is also the last gate for the private route. A target marked localOnly
+// is refused here, before any request exists, unless its provider is local.
+// resolve already drops such entries, so this should never fire; it is here so
+// that a later change to resolve or to the fallback loop cannot send private
+// content off the network without also changing this check. The refusal wraps
+// errLocalOnly, which call turns into a hard stop (no fallback to anything).
+//
+// Otherwise it fails, without calling anyone, when t's provider needs a key and none is
 // registered: the provider was enabled when the model was resolved but its
 // key has gone since (or the key lookup isn't wired). That is reported like a
 // provider failure, so a route moves on to its next entry.
 func (h *chatHandler) upstreamRequest(t target, body []byte) (upstream.Request, *upstream.Error) {
+	if t.localOnly && !t.provider.Local {
+		// Metadata only: never anything from the request.
+		slog.Error("chat: BUG: private route reached a non-local provider; request refused",
+			"provider", t.provider.Name, "model", t.model.ID)
+		return upstream.Request{}, &upstream.Error{Kind: upstream.KindProvider,
+			Provider: t.provider.Name, Model: t.model.ID, Err: errLocalOnly,
+			Message: "refused: the private route may only use local providers"}
+	}
 	req := upstream.Request{
 		Provider: t.provider.Name,
 		BaseURL:  t.provider.BaseURL,

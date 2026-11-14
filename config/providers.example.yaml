@@ -69,6 +69,10 @@ routes:
     - gemini/gemini-3.1-flash-lite
     - openrouter/nvidia/nemotron-3.5-lightning:free
     - gemini/gemini-3.6-flash
-  # Local providers only.
+  # Never leaves your network: local providers only (`local: true`, i.e. Ollama).
+  # Startup fails if an entry here belongs to any other provider, and the router checks again
+  # on every request. If Ollama is down, requests for `private` fail; they are never sent
+  # elsewhere. Only the route named `private` gets this; other routes are not restricted.
+  # The route is optional: without it, asking for `private` is an unknown model.
   private:
     - ollama/llama3.2:3b

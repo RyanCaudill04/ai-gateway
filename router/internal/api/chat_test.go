@@ -161,12 +161,13 @@ type fixture struct {
 // fixtureOpts are the knobs of a fixture; the zero value is what most tests
 // want.
 type fixtureOpts struct {
-	yaml    string           // providers config; "": chatYAML
-	enabled []string         // enabled providers; none: all
-	noKey   []string         // providers whose key lookup fails
-	budget  time.Duration    // ChatDeps.RouteBudget
-	client  upstream.Options // upstream timeouts
-	all     http.HandlerFunc // handler for every provider without its own
+	yaml    string                            // providers config; "": chatYAML
+	build   func(upURL string) *config.Config // a hand-built config, bypassing Parse; wins over yaml
+	enabled []string                          // enabled providers; none: all
+	noKey   []string                          // providers whose key lookup fails
+	budget  time.Duration                     // ChatDeps.RouteBudget
+	client  upstream.Options                  // upstream timeouts
+	all     http.HandlerFunc                  // handler for every provider without its own
 	each    map[string]http.HandlerFunc
 }
 
@@ -201,9 +202,15 @@ func newFixtureWith(t *testing.T, o fixtureOpts) *fixture {
 	if o.yaml == "" {
 		o.yaml = chatYAML
 	}
-	cfg, err := config.Parse([]byte(o.yaml), func(string) string { return up.URL }, nil)
-	if err != nil {
-		t.Fatal(err)
+	var cfg *config.Config
+	if o.build != nil {
+		cfg = o.build(up.URL)
+	} else {
+		var err error
+		cfg, err = config.Parse([]byte(o.yaml), func(string) string { return up.URL }, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	// A nil database keeps the tracker in memory: the api package is tested
 	// without SQLite.

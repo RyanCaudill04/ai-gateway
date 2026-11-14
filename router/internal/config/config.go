@@ -18,6 +18,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// PrivateRoute is the name of the route that must never leave the network. It
+// may only contain entries of `local: true` providers: Parse rejects anything
+// else, and the chat handler enforces the same rule again at request time, so
+// the guarantee does not depend on the config having been checked. The route is
+// optional; without it a request for "private" is an unknown model.
+const PrivateRoute = "private"
+
 // Config is the validated configuration.
 type Config struct {
 	Providers map[string]*Provider
@@ -178,8 +185,13 @@ func Parse(data []byte, getenv func(string) string, hasKey HasKey) (*Config, err
 		seen := map[string]bool{}
 		for i, id := range entries {
 			efield := fmt.Sprintf("%s[%d]", field, i)
-			if _, _, ok := cfg.Lookup(id); !ok {
+			if p, _, ok := cfg.Lookup(id); !ok {
 				bad("%s: %q is not a known provider/model", efield, id)
+			} else if name == PrivateRoute && !p.Local {
+				// The point of this route is that prompts stay on this network,
+				// so one non-local entry would break it. Say which one.
+				bad("%s: %q is served by provider %q, which is not local: true, and the %s route may only use local providers",
+					efield, id, p.Name, PrivateRoute)
 			}
 			if seen[id] {
 				bad("%s: %q is listed twice", efield, id)

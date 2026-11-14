@@ -82,6 +82,43 @@ func TestParse(t *testing.T) {
 			wantErr: []string{"context_length: must be a positive number", "routes.empty: route has no entries"},
 		},
 		{
+			name: "private route with a non-local entry",
+			yaml: strings.Replace(valid, "  private:\n    - ollama/llama3.2:3b", "  private:\n    - groq/llama-3.3-70b-versatile", 1),
+			env:  ollamaEnv, hasKey: keys("groq"),
+			wantErr: []string{"routes.private[0]", `"groq/llama-3.3-70b-versatile"`, `provider "groq"`, "not local: true"},
+		},
+		{
+			name: "private route mixing local and non-local entries",
+			yaml: strings.Replace(valid, "  private:\n    - ollama/llama3.2:3b", "  private:\n    - ollama/llama3.2:3b\n    - groq/llama-3.3-70b-versatile", 1),
+			env:  ollamaEnv, hasKey: keys("groq"),
+			wantErr: []string{"routes.private[1]", "not local: true"},
+		},
+		{
+			name: "private route problem is reported alongside others",
+			yaml: strings.Replace(valid, "  private:\n    - ollama/llama3.2:3b", "  private:\n    - groq/llama-3.3-70b-versatile\n  empty: []", 1),
+			env:  ollamaEnv, hasKey: keys("groq"),
+			wantErr: []string{"routes.private[0]", "routes.empty: route has no entries"},
+		},
+		{
+			// Another route's name gets no special treatment, even when it
+			// mixes in remote providers.
+			name: "a route not named private may mix local and non-local",
+			yaml: strings.Replace(valid, "  private:", "  confidential:\n    - groq/llama-3.3-70b-versatile\n  private:", 1),
+			env:  ollamaEnv, hasKey: keys("groq"),
+		},
+		{
+			name: "private route, all local, several providers",
+			yaml: strings.Replace(strings.Replace(valid, "routes:\n",
+				"  ollama2:\n    base_url: http://other:11434/v1\n    local: true\n    models:\n      - id: small\n        context_length: 4096\nroutes:\n", 1),
+				"  private:\n    - ollama/llama3.2:3b", "  private:\n    - ollama/llama3.2:3b\n    - ollama2/small", 1),
+			env: ollamaEnv, hasKey: keys("groq"),
+		},
+		{
+			name: "no private route at all",
+			yaml: strings.Replace(valid, "  private:\n    - ollama/llama3.2:3b\n", "", 1),
+			env:  ollamaEnv, hasKey: keys("groq"),
+		},
+		{
 			name:    "no providers",
 			yaml:    "routes: {}\n",
 			env:     ollamaEnv,

@@ -39,6 +39,9 @@ type outcome struct {
 	answer *answer         // a provider answered; nothing has been written yet
 	err    *apierror.Error // none did: the error to send
 	gone   bool            // the client left; there is nobody to answer
+	// refused is true when the last gate (upstreamRequest) stopped a private
+	// request. err is then set and the route stops: no other entry is tried.
+	refused bool
 
 	calls int // upstream requests made
 	// last is the target of the last upstream request: the one that answered
@@ -73,6 +76,14 @@ func (h *chatHandler) dispatch(ctx context.Context, res resolution, body []byte,
 		h.pinned(ctx, res.targets[0], body, stream, out)
 	} else {
 		h.route(ctx, res.targets, body, stream, out)
+	}
+	if res.localOnly && out.err != nil && out.err.Type == apierror.TypeAllProvidersExhausted {
+		// The generic text ("no provider is available") does not say that the
+		// private route has nowhere else to go, nor what to check. The type,
+		// code, status and attempts stay as they are.
+		out.err.Message = "None of the local providers the private route is limited to could answer " +
+			"(is the local model server, Ollama, running?). Nothing was sent to any other provider. " +
+			"See attempts for each reason."
 	}
 	return out
 }
@@ -149,7 +160,7 @@ func (h *chatHandler) route(ctx context.Context, targets []target, body []byte, 
 
 		ans, ue, called := h.call(ctx, t, body, stream, out)
 		switch {
-		case out.gone:
+		case out.gone, out.refused:
 			return
 		case ue == nil:
 			out.answer = ans
@@ -175,6 +186,13 @@ func (h *chatHandler) route(ctx context.Context, targets []target, body []byte, 
 func (h *chatHandler) call(ctx context.Context, t target, body []byte, stream bool, out *outcome) (ans *answer, ue *upstream.Error, called bool) {
 	req, ue := h.upstreamRequest(t, body)
 	if ue != nil {
+		if errors.Is(ue, errLocalOnly) {
+			// Not a provider failure to fall back from: the route is over. The
+			// refused entry is not listed as an attempt, as it was not tried.
+			out.refused = true
+			out.err = apierror.Unavailable("private_route_violation",
+				"The private route refused to send this request to a provider that is not local. Nothing was sent.")
+		}
 		return nil, ue, false
 	}
 	out.calls++

@@ -262,6 +262,47 @@ written as they are, including their `/`, `:` and `@`
 Any other character outside `A-Z a-z 0-9 - . _ ~` is percent-encoded, so a
 comma, `=` or space can only ever be a separator.
 
+### The `private` route
+
+`private` never leaves your network. It is served only by providers marked
+`local: true` in `config/providers.yaml` (Ollama), and that is enforced in
+three places, so a bad edit or a later code change cannot silently break it:
+
+1. **Startup.** The router refuses to start if `routes.private` lists a model
+   of a provider that is not `local: true`; the error names the entry.
+2. **Resolving a request.** Even if a config skipped that check, any non-local
+   entry of `private` is dropped from the list of entries to try, never called.
+3. **Building the upstream call.** The single place a request to a provider is
+   made refuses a `private` request to a non-local provider. This should never
+   happen; if it does it is a bug, it is logged as an error (names only, never
+   request content), and the request fails with `503` `provider_error` /
+   `private_route_violation` and nothing is sent. It does not move on to another
+   entry.
+
+Several local providers may be listed, and `private` falls back among them as
+any route does. A local entry whose provider is disabled is skipped like any
+disabled entry. If no local entry can answer (for example Ollama is not
+running), `private` fails with `all_providers_exhausted` and never tries
+anything else. The `message` says so, and `attempts` and `x-router-fallback`
+list only the local entries that were tried:
+
+```json
+{"error": {
+  "message": "None of the local providers the private route is limited to could answer (is the local model server, Ollama, running?). Nothing was sent to any other provider. See attempts for each reason.",
+  "type": "all_providers_exhausted", "code": "all_providers_exhausted",
+  "attempts": [{"provider": "ollama", "model": "llama3.2:3b", "type": "provider_error", "message": "..."}]
+}}
+```
+
+The route is optional: with no `private` in the config, `model: "private"` is
+an unknown model (`404`). In `GET /v1/models`, `private` has `local: true`
+whenever it is listed.
+
+The guarantee covers the route named `private` only. A route with any other
+name that happens to contain only local providers gets no special treatment,
+and a pinned model (`groq/...`) goes where its provider is, as asked; pinned
+local models such as `ollama/llama3.2:3b` are of course local.
+
 ### Errors before and during a stream
 
 The router reads the provider's first event before it sends anything. So if
