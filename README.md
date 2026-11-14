@@ -70,7 +70,12 @@ services ──┘    │        │                            │          │
    docker compose exec router /router providers list
    ```
    See [Provider keys](#provider-keys) for the other commands.
-6. Open <http://localhost:8080> (or the `HTTP_PORT` you set). Check the API with:
+6. Create an API key for each service that will call `/v1/*` (printed once; store it in that service's config):
+   ```bash
+   docker compose exec router /router keys create mc-bot --daily-cap 500
+   ```
+   See [Service API keys](#service-api-keys).
+7. Open <http://localhost:8080> (or the `HTTP_PORT` you set). Check the API with:
    ```bash
    curl http://localhost:8080/api/health
    ```
@@ -128,11 +133,47 @@ These commands talk to the running router over an admin API that listens only on
 inside the router container (`ADMIN_ADDR`). It isn't published, Caddy never routes to it, and the
 router refuses to start it on a non-loopback address. If the router isn't running, the commands say so.
 
+## Service API keys
+Every service that calls the OpenAI-compatible API (`/v1/*`) gets its own key, so its usage is
+attributed to it, you can revoke it alone, and a daily cap stops one service from using up the
+free-tier quota the others need. Like provider keys, changes apply to the very next request.
+
+```bash
+# Create a key. It's printed once, on stdout, and can't be shown again (only its hash is stored).
+# --daily-cap is optional: the most requests per UTC day; leave it out for no cap.
+docker compose exec router /router keys create mc-bot --daily-cap 500
+
+# Name, prefix, cap, requests today, created, revoked. Never the key itself.
+docker compose exec router /router keys list
+
+# Stop a key working, from the next request. Its row and usage stay in the list.
+docker compose exec router /router keys revoke mc-bot
+```
+- Services send it as `Authorization: Bearer <key>` (the OpenAI SDKs' `api_key`). See
+  [docs/api.md](docs/api.md#authentication) for the `401` and `429` responses.
+- Names are 1-32 lowercase letters, digits and `-`, starting with a letter. The name is part of the
+  key (`sk-mc-bot-...`) and is what logs record as the service.
+- **Rotating a key:** `keys revoke mc-bot`, then `keys create mc-bot`. Creating a name that already has
+  an *active* key is refused, so a working key is never replaced by accident. Re-creating a revoked
+  name gives a new key (the old one never works again) and keeps today's count, so rotating doesn't
+  reset the cap. Revoking an already revoked key changes nothing and says so.
+- Every request a key makes to `/v1/*` counts toward its cap, including `GET /v1/models`. Requests
+  refused for being over the cap don't. The count resets at midnight UTC.
+- Counts are written to the database in the background and survive restarts. If the router crashes
+  (rather than being stopped), the last few milliseconds of counts can be lost, so a key may get that
+  many extra requests that day.
+
 ## Authentication
 Every router endpoint except the health checks (`GET /api/health`, and the internal `/healthz`)
-requires a signed-in caller. That includes paths that don't exist: an anonymous request gets `401`, not `404`.
+requires an authenticated caller. That includes paths that don't exist: an anonymous request gets `401`,
+not `404`. There are two kinds of caller:
 
-Sign-in is handled by [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/).
+- **Services, on `/v1/*`:** a [service API key](#service-api-keys), and nothing else. This is checked
+  in every `AUTH_MODE` (including `none`) and doesn't depend on the Cloudflare Access settings below.
+- **The browser UI, on `/api/*`:** a Cloudflare Access sign-in, as described below. A service key
+  alone doesn't open `/api/*`.
+
+Browser sign-in is handled by [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/).
 Access adds a signed token (`Cf-Access-Jwt-Assertion`) to each request it lets through, and the router
 verifies it on every request: signature (against your team's public keys), issuer, audience, expiry,
 and that the email is in `AUTH_ALLOWED_EMAILS`. A request that reaches the router without passing
@@ -152,10 +193,15 @@ through Cloudflare (for example on the LAN port) has no valid token and is refus
 |----------|---------|
 | `401` | No token, or one that didn't verify |
 | `403` | A genuine token for an email that isn't allowed |
-| `503` `auth_not_configured` | The settings above are missing or invalid; the reason is in `docker compose logs router` |
+| `503` `auth_not_configured` | The settings above are missing or invalid; the reason is in `docker compose logs router`. Only `/api/*` is locked; `/v1/*` keeps working with service keys |
 
-For local development without Cloudflare, set `AUTH_MODE=none`. That turns authentication off entirely,
-so only use it on your own machine.
+For local development without Cloudflare, set `AUTH_MODE=none`. That turns sign-in off for `/api/*`
+entirely, so only use it on your own machine. `/v1/*` still needs a service key.
+
+If your Cloudflare Access application covers the whole hostname, Cloudflare itself stops services
+before they reach the router. Either add an Access policy for the `/v1/*` path with the **Bypass**
+action (the router's key check then protects it), or give each service an Access service token as a
+second layer in front of its key.
 
 ## Updating
 Prebuilt images:
@@ -167,6 +213,12 @@ From source: `git pull && docker compose up -d --build`.
 **Upgrading from a version that read provider keys from `.env`:** add `GATEWAY_SECRET_KEY` to `.env`
 first (install step 2), or the new router won't start (the auto-updater will roll back). Then register
 your keys with `providers set-key` and delete the old `*_API_KEY` lines from `.env`.
+
+**Upgrading to the version with service API keys:** `/v1/*` now needs `Authorization: Bearer <key>`.
+A Cloudflare Access sign-in no longer opens it, and neither does `AUTH_MODE=none`. Anything calling
+`/v1/*` gets `401` until you create a key for it (`router keys create <name>`, see
+[Service API keys](#service-api-keys)) and configure it there. `/api/*` and the health checks are unchanged.
+The database migration (new tables `api_keys` and `api_key_usage`) runs on startup.
 
 ### Automatic updates (optional)
 The `autoupdate` profile adds an `updater` service that checks GHCR every `UPDATE_INTERVAL` seconds
@@ -259,8 +311,9 @@ cd router && LISTEN_ADDR=:8081 ADMIN_ADDR=127.0.0.1:8082 DATABASE_PATH=./dev.db 
   PROVIDERS_CONFIG=../config/providers.yaml go run ./cmd/router
 ```
 ```bash
-# register a key with the dev router
+# register a key with the dev router, and create a service key to call /v1/* with
 cd router && ADMIN_ADDR=127.0.0.1:8082 go run ./cmd/router providers set-key groq
+ADMIN_ADDR=127.0.0.1:8082 go run ./cmd/router keys create dev
 ```
 ```bash
 # UI on :5173, proxies /v1 and /api to the router on :8081
