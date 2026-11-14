@@ -90,6 +90,19 @@ func TestEachTypeStatusHeadersAndBody(t *testing.T) {
 			absent: []string{"param", "provider"},
 		},
 		{
+			name:   "invalid_request, unknown model",
+			err:    ModelNotFound(),
+			status: 404, wantType: "invalid_request", wantCode: "model_not_found",
+			want:   map[string]any{"param": "model"},
+			absent: []string{"provider"},
+		},
+		{
+			name:   "invalid_request, body too large",
+			err:    RequestTooLarge(20 << 20),
+			status: 413, wantType: "invalid_request", wantCode: "request_too_large",
+			want: map[string]any{"message": "The request body is larger than the 20 MiB limit."},
+		},
+		{
 			name:   "invalid_request, method not allowed",
 			err:    MethodNotAllowed(),
 			status: 405, wantType: "invalid_request", wantCode: "method_not_allowed",

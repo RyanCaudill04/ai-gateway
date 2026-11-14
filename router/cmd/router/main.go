@@ -36,6 +36,7 @@ import (
 	"github.com/RyanCaudill04/ai-gateway/router/internal/providerkeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/ratelimit"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
 
 // commands are the subcommands. Each runs as a second process next to the
@@ -136,9 +137,17 @@ func run(addr string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	handler := newHandler(handlerDeps{
+		authn:       newAuthenticator(),
+		db:          db,
+		cfg:         cfg,
+		enabled:     enabled,
+		upstream:    upstream.New(upstream.Options{}),
+		providerKey: keys.Get,
+	})
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(newAuthenticator(), db, cfg, enabled),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		// No WriteTimeout on purpose: streamed completions can run for minutes.
 	}
@@ -188,11 +197,29 @@ func providerEnabled(cfg *config.Config, hasKey func(provider string) bool) api.
 // pinger is the part of the store /healthz needs. nil skips the check (tests).
 type pinger interface{ Ping(context.Context) error }
 
+// handlerDeps is everything the routes need. The chat hooks left nil mean
+// "nothing registered" (see api.ChatDeps), which is what tests use.
+type handlerDeps struct {
+	authn   auth.Authenticator
+	db      pinger
+	cfg     *config.Config
+	enabled api.EnabledFunc
+
+	upstream    *upstream.Client     // nil: a client with the default timeouts
+	providerKey api.KeyFunc          // provider API keys (#40); nil: none
+	observer    api.UpstreamObserver // rate-limit tracker (#16); nil: none
+	onSummary   api.SummaryFunc      // request log (#15); nil: none
+}
+
 // newHandler builds the router's routes. Access is deny-by-default: the only
 // public routes are the two health checks registered by name below. Every
 // other path, including ones that don't exist yet, goes through authn first,
 // so a new endpoint can't be left open by forgetting to protect it.
-func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled api.EnabledFunc) http.Handler {
+func newHandler(d handlerDeps) http.Handler {
+	authn, db, cfg, enabled := d.authn, d.db, d.cfg, d.enabled
+	if d.upstream == nil {
+		d.upstream = upstream.New(upstream.Options{})
+	}
 	mux := http.NewServeMux()
 
 	// Internal only: Caddy forwards /v1/* and /api/* unchanged, so this
@@ -229,6 +256,14 @@ func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled
 	})
 
 	protected.Handle("GET /v1/models", api.Models(cfg, enabled))
+	protected.Handle("POST /v1/chat/completions", api.Chat(api.ChatDeps{
+		Config:    cfg,
+		Enabled:   enabled,
+		Client:    d.upstream,
+		Key:       d.providerKey,
+		Observer:  d.observer,
+		OnSummary: d.onSummary,
+	}))
 
 	// The browser proves who it is with a cookie that it sends automatically,
 	// so another site could try to make it send requests here (CSRF). This
