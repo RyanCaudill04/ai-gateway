@@ -35,6 +35,15 @@ the Groq way (requests per day, tokens per minute), anything else the OpenAI way
 headers that explain it blocks the model for `Retry-After` (one minute if not given), recorded as a requests window.
 Providers with no headers (Gemini, Workers AI) show as unknown and are only skipped after a 429.
 
+## How the poller refreshes them
+
+See `router/internal/poller`. OpenRouter's `GET /api/v1/key` returns `data.free_model_daily_requests`
+(`used`, `limit`, `remaining`; resets at UTC midnight, shared by all `:free` models; checked 2026-11-14 against
+OpenRouter's [limits page](https://openrouter.ai/docs/api_reference/limits)). The poller reads it, free, and
+records a requests-per-day window for each `:free` model. Local providers get a `GET <base_url>/models`
+reachability check. Gemini and Workers AI are never probed (no headers). Everything else gets a one-token
+completion at most once per `USAGE_POLL_INTERVAL` per model.
+
 ## Sources
 
 - Groq: [rate limits](https://console.groq.com/docs/rate-limits), [errors](https://console.groq.com/docs/errors), [OpenAI compatibility](https://console.groq.com/docs/openai), context-length body as reported in [OpenDevin #1902](https://github.com/OpenDevin/OpenDevin/issues/1902)

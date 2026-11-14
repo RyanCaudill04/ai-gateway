@@ -128,6 +128,24 @@ These commands talk to the running router over an admin API that listens only on
 inside the router container (`ADMIN_ADDR`). It isn't published, Caddy never routes to it, and the
 router refuses to start it on a non-loopback address. If the router isn't running, the commands say so.
 
+## Usage poller
+
+Providers only report rate-limit numbers when a request goes through, so they go stale while a provider
+sits idle. A background poller inside the router refreshes them, spending as little quota as it can:
+
+- **OpenRouter**: reads its free key endpoint (no quota used). Never sends it a completion.
+- **Ollama / local**: a reachability check only, never a generation.
+- **Groq and other providers that send rate-limit headers**: a one-word, one-token request, only for a
+  model that is in a route or was used in the last 24 hours, and only if nothing refreshed it within the
+  interval. It is skipped when the model is exhausted or nearly exhausted (5 requests or a tenth of the
+  window left), or when every window's reset time has passed.
+- **Gemini and Workers AI**: never probed. They send no rate-limit headers, so a probe would use quota and
+  learn nothing.
+
+`USAGE_POLL_INTERVAL` in `.env` sets the interval (default `1h`, minimum `1m`, `off` to disable). That is
+at most 24 probes a day per probed model. The router logs the day's probe count after each round of
+probes (`usage poller: probes today`), naming only provider and model.
+
 ## Authentication
 Every router endpoint except the health checks (`GET /api/health`, and the internal `/healthz`)
 requires a signed-in caller. That includes paths that don't exist: an anonymous request gets `401`, not `404`.

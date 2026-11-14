@@ -33,9 +33,11 @@ import (
 	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/poller"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/providerkeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/ratelimit"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
 
 // commands are the subcommands. Each runs as a second process next to the
@@ -127,6 +129,11 @@ func run(addr string) error {
 		}
 	}()
 
+	pollInterval, err := poller.IntervalFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
+
 	adminLn, err := admin.Listen(envOr("ADMIN_ADDR", admin.DefaultAddr))
 	if err != nil {
 		return err
@@ -155,6 +162,21 @@ func run(addr string) error {
 	go func() {
 		slog.Info("admin API listening (loopback only)", "addr", adminLn.Addr().String())
 		errCh <- adminSrv.Serve(adminLn)
+	}()
+
+	// Started last, once both servers are going, and stopped (deferred after
+	// the tracker's, so it runs first) before the tracker flushes its results.
+	usage := poller.New(poller.Deps{
+		Config: cfg, Tracker: limits, Completer: upstream.New(upstream.Options{}),
+		Key: keys.Get, Enabled: enabled,
+	}, poller.Options{Interval: pollInterval})
+	usage.Start(ctx)
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := usage.Stop(stopCtx); err != nil {
+			slog.Error("stopping usage poller", "err", err)
+		}
 	}()
 
 	var serveErr error
