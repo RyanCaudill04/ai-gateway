@@ -55,7 +55,8 @@ func cliFixture(t *testing.T) (*admin.Client, *providerkeys.Keys) {
 		t.Fatal(err)
 	}
 	keys := testKeys(t)
-	srv := httptest.NewServer(newAdminHandler(cfg, keys, providerEnabled(cfg, keys.Has)))
+	apiKeys, _ := testAPIKeys(t)
+	srv := httptest.NewServer(newAdminHandler(cfg, keys, providerEnabled(cfg, keys.Has), apiKeys))
 	t.Cleanup(srv.Close)
 	return admin.NewClient(strings.TrimPrefix(srv.URL, "http://")), keys
 }

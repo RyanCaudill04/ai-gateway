@@ -26,7 +26,7 @@ CREATE TABLE api_keys (
     name        TEXT NOT NULL UNIQUE,
     prefix      TEXT NOT NULL,          -- first chars, to recognise a key in lists
     key_hash    BLOB NOT NULL UNIQUE,   -- SHA-256 of the key; lookups are by hash
-    daily_cap   INTEGER,                -- NULL = no cap
+    daily_cap   INTEGER CHECK (daily_cap IS NULL OR daily_cap > 0), -- NULL = no cap
     created_at  TEXT NOT NULL,
     revoked_at  TEXT                    -- NULL = active
 );
@@ -37,7 +37,16 @@ CREATE TABLE api_key_usage (
     PRIMARY KEY (key_id, day)
 ) WITHOUT ROWID;
 ```
-Cap check is one upsert-and-read on the writer. A new day is a new row, so "resets daily" needs no job.
+A new day is a new row, so "resets daily" needs no job. The cap check doesn't touch the database:
+the router keeps every key and today's counts in memory, checks and counts a request in one step
+under a lock (exact under concurrency), and writes counts in the background (`MAX(requests, new)`
+upsert, batched). Counts are loaded back at startup. A crash can lose the counts admitted since the
+last write (milliseconds' worth), so that day the key may get that many extra requests; a normal
+shutdown writes everything.
+
+`prefix` is `sk-<name>-` plus the first 4 random characters, for `keys list`. A revoked key keeps its
+row; creating a key with a revoked key's name reuses that row (new hash, prefix, cap and `created_at`,
+`revoked_at` cleared), so today's count carries over and the old key can't come back.
 
 ## 0003: request_log (#15)
 ```sql

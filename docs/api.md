@@ -1,7 +1,73 @@
 # API reference
 
 Endpoints the router serves to clients. Everything except the health checks
-requires an authenticated caller. Add new endpoints as a `##` section below.
+requires an authenticated caller (see [Authentication](#authentication)). Add
+new endpoints as a `##` section below.
+
+## Authentication
+
+| Paths | Who calls them | Credential |
+|-------|----------------|------------|
+| `/v1/*` | Services (the OpenAI-compatible API) | A service API key: `Authorization: Bearer <key>` |
+| `/api/*` | The browser UI | Cloudflare Access sign-in (`Cf-Access-Jwt-Assertion`), plus a same-origin check for state-changing requests |
+| `GET /api/health`, `GET /healthz` | Anyone | None |
+
+### Service API keys (`/v1/*`)
+
+Each calling service has its own key, created with `router keys create <name>`
+(see the README). Send it on every request:
+
+```
+Authorization: Bearer sk-mc-bot-...
+```
+
+With the OpenAI SDKs, pass it as the API key and point `base_url` at the
+gateway, e.g. `OpenAI(base_url="https://ai.example.com/v1", api_key="sk-mc-bot-...")`.
+
+- The key is the only thing `/v1/*` checks. It is required in every
+  `AUTH_MODE`, including `none`, and it doesn't depend on the Cloudflare Access
+  settings. A Cloudflare Access sign-in alone does not open `/v1/*`, and a key
+  alone does not open `/api/*`.
+- Unknown paths under `/v1/` also need a key (without one they are `401`, not
+  `404`).
+- A key that is missing, malformed, unknown or revoked gets the same `401`;
+  the response doesn't say which. A revoked key stops working on the very next
+  request.
+
+```
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer realm="ai-gateway"
+
+{"error": {"message": "A valid API key is required: send it as \"Authorization: Bearer <key>\".", "type": "unauthorized", "code": "unauthorized"}}
+```
+
+### Daily cap
+
+A key may have a daily request cap. Every request that a valid key makes to
+`/v1/*` counts, whatever the endpoint (so `GET /v1/models` counts as much as a
+chat completion). Requests refused for being over the cap don't count. The day
+is the UTC day: the count goes back to 0 at midnight UTC. Over the cap:
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 30600
+
+{
+  "error": {
+    "message": "This API key has reached its daily request limit. It resets at 2026-11-14T00:00:00Z.",
+    "type": "rate_limited",
+    "code": "rate_limit_exceeded",
+    "limit_type": "requests",
+    "window": "day",
+    "resets_at": "2026-11-14T00:00:00Z"
+  }
+}
+```
+
+There is no `provider` or `model`: the limit belongs to the caller. The
+OpenAI SDKs only honour `Retry-After` up to 60 seconds, so they will retry a
+few times and then give up; check for `type: rate_limited` with no `provider`
+to tell the cap apart from a provider limit.
 
 ## GET /v1/models
 
@@ -170,7 +236,7 @@ bodies or headers.
 | `provider_error` | 502 | The provider failed (5xx, timeout, network error, or the router's provider key was rejected). 503 when the router itself can't serve the request (`code: auth_not_configured`, `provider_not_enabled`, `no_enabled_provider`) |
 | `all_providers_exhausted` | 429 or 503 | Every provider a virtual model tried failed. 429 (with `Retry-After` when a reset is known) if every attempt was a rate limit, otherwise 503 |
 | `invalid_request` | 400, 404, 405, 413 | The request is wrong: bad body, unknown endpoint (`code: not_found`), unknown model (`code: model_not_found`), wrong method (`code: method_not_allowed`, with an `Allow` header), body too large (`code: request_too_large`) |
-| `unauthorized` | 401 or 403 | 401: no valid sign-in. 403 (`code: forbidden`, or `cross_origin_forbidden` for a cross-site browser request): signed in but not allowed |
+| `unauthorized` | 401 or 403 | 401: no valid API key (`/v1/*`) or sign-in (`/api/*`). 403 (`code: forbidden`, or `cross_origin_forbidden` for a cross-site browser request): signed in but not allowed |
 
 The OpenAI SDKs retry 408, 409, 429 and 5xx on their own, and honour
 `Retry-After` when it is 60 seconds or less. The 4xx codes above (400, 401,

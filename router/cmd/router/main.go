@@ -6,6 +6,7 @@
 //	router healthcheck  exit 0 if the running server's /healthz returns 200, else 1
 //	router backup <path>  write a consistent copy of the database to <path> (VACUUM INTO)
 //	router providers ...  register, list and remove provider API keys (see providers.go)
+//	router keys ...       create, list and revoke per-service API keys (see keys.go)
 //
 // The healthcheck subcommand exists because the runtime image has no shell or
 // curl, so Docker's HEALTHCHECK runs this same binary as the HTTP client.
@@ -31,6 +32,7 @@ import (
 	"github.com/RyanCaudill04/ai-gateway/router/internal/admin"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/api"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apikeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/poller"
@@ -47,6 +49,7 @@ var commands = map[string]func(args []string) error{
 	"healthcheck": func([]string) error { return healthcheck(envOr("LISTEN_ADDR", ":8080")) },
 	"backup":      backup,
 	"providers":   providersCommand,
+	"keys":        keysCommand,
 }
 
 func main() {
@@ -54,7 +57,7 @@ func main() {
 		name := os.Args[1]
 		cmd, ok := commands[name]
 		if !ok {
-			fmt.Fprintln(os.Stderr, "unknown command; available: healthcheck, backup, providers")
+			fmt.Fprintln(os.Stderr, "unknown command; available: healthcheck, backup, providers, keys")
 			os.Exit(2)
 		}
 		if err := cmd(os.Args[2:]); err != nil {
@@ -134,12 +137,26 @@ func run(addr string) error {
 		return err
 	}
 
+	// Service keys and today's counts. Deferred after db.Close, so it runs
+	// first: counts not yet written are saved once the server has stopped.
+	apiKeys, err := apikeys.Open(context.Background(), db)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := apiKeys.Close(ctx); err != nil {
+			slog.Error("saving api key usage on shutdown", "err", err)
+		}
+	}()
+
 	adminLn, err := admin.Listen(envOr("ADMIN_ADDR", admin.DefaultAddr))
 	if err != nil {
 		return err
 	}
 	adminSrv := &http.Server{
-		Handler:           newAdminHandler(cfg, keys, enabled),
+		Handler:           newAdminHandler(cfg, keys, enabled, apiKeys),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -150,6 +167,7 @@ func run(addr string) error {
 		enabled:     enabled,
 		upstream:    upstream.New(upstream.Options{}),
 		providerKey: keys.Get,
+		apiKeys:     apiKeys,
 	})
 	srv := &http.Server{
 		Addr:              addr,
@@ -225,6 +243,7 @@ type handlerDeps struct {
 	db      pinger
 	cfg     *config.Config
 	enabled api.EnabledFunc
+	apiKeys *apikeys.Store // service keys for /v1/* (#14)
 
 	upstream    *upstream.Client     // nil: a client with the default timeouts
 	providerKey api.KeyFunc          // provider API keys (#40); nil: none
@@ -234,10 +253,27 @@ type handlerDeps struct {
 
 // newHandler builds the router's routes. Access is deny-by-default: the only
 // public routes are the two health checks registered by name below. Every
-// other path, including ones that don't exist yet, goes through authn first,
-// so a new endpoint can't be left open by forgetting to protect it.
+// other path, including ones that don't exist yet, is caught by one of two
+// subtrees, each behind its own check, so a new endpoint can't be left open
+// by forgetting to protect it:
+//
+//   - /v1/* (the OpenAI-compatible API, called by services): a service API
+//     key from `router keys create`, sent as "Authorization: Bearer <key>",
+//     checked by apikeys.Require, which also enforces the key's daily cap.
+//     That is the only check. No Cloudflare Access token is needed or looked
+//     at, in every AUTH_MODE: with AUTH_MODE=none a key is still required,
+//     and misconfigured Access settings ("locked") lock /api/* only. No CSRF
+//     check either: it exists because browsers attach cookies on their own,
+//     and they never attach an Authorization header on their own, so a page
+//     on another site can't make a browser send a key it doesn't have.
+//   - everything else, /api/* in practice (the UI): authn (Cloudflare Access,
+//     or nobody with AUTH_MODE=none) plus CSRF protection, as before. An API
+//     key alone gets nowhere here.
+//
+// Register /v1 routes on v1 and every other route on protected. A /v1 route
+// put on protected would never be reached: the /v1/ subtree catches it first.
 func newHandler(d handlerDeps) http.Handler {
-	authn, db, cfg, enabled := d.authn, d.db, d.cfg, d.enabled
+	authn, db, cfg, enabled, keys := d.authn, d.db, d.cfg, d.enabled, d.apiKeys
 	if d.upstream == nil {
 		d.upstream = upstream.New(upstream.Options{})
 	}
@@ -266,6 +302,23 @@ func newHandler(d handlerDeps) http.Handler {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
+	// Everything registered on this mux requires a valid service API key.
+	v1 := http.NewServeMux()
+	v1.Handle("GET /v1/models", api.Models(cfg, enabled))
+	v1.Handle("POST /v1/chat/completions", api.Chat(api.ChatDeps{
+		Config:    cfg,
+		Enabled:   enabled,
+		Client:    d.upstream,
+		Key:       d.providerKey,
+		Observer:  d.observer,
+		OnSummary: d.onSummary,
+	}))
+	v1Handler := apikeys.Require(keys, apierror.Routes(v1))
+	mux.Handle("/v1/", v1Handler)
+	// Bare "/v1" too, or the mux would answer it with an unauthenticated
+	// redirect to "/v1/".
+	mux.Handle("/v1", v1Handler)
+
 	// Everything registered on this mux requires an authenticated caller.
 	protected := http.NewServeMux()
 	// Who the router thinks is calling. Lets the UI tell "signed in" from "not".
@@ -275,16 +328,6 @@ func newHandler(d handlerDeps) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		json.NewEncoder(w).Encode(map[string]string{"email": id.Email})
 	})
-
-	protected.Handle("GET /v1/models", api.Models(cfg, enabled))
-	protected.Handle("POST /v1/chat/completions", api.Chat(api.ChatDeps{
-		Config:    cfg,
-		Enabled:   enabled,
-		Client:    d.upstream,
-		Key:       d.providerKey,
-		Observer:  d.observer,
-		OnSummary: d.onSummary,
-	}))
 
 	// The browser proves who it is with a cookie that it sends automatically,
 	// so another site could try to make it send requests here (CSRF). This
@@ -309,7 +352,7 @@ func newAuthenticator() auth.Authenticator {
 		return auth.Locked(err)
 	}
 	if cfg.Mode == auth.ModeNone {
-		slog.Warn("AUTH_MODE=none: authentication is DISABLED. Never expose this instance to a network you don't trust.")
+		slog.Warn("AUTH_MODE=none: authentication of /api/* is DISABLED (/v1/* still needs an API key). Never expose this instance to a network you don't trust.")
 		return auth.Disabled()
 	}
 	slog.Info("auth: Cloudflare Access", "team_domain", cfg.TeamDomain, "allowed_emails", len(cfg.AllowedEmails))
