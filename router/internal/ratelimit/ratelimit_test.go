@@ -481,3 +481,59 @@ func TestConcurrentUse(t *testing.T) {
 		t.Errorf("rows = %d, want 12", n)
 	}
 }
+
+// A window read from a usage endpoint lands like a header reading: stamped
+// with the check time, counted as an observation, and able to exhaust the model.
+func TestObserveWindow(t *testing.T) {
+	tr := memTracker(t)
+	reset := t0.Add(6 * time.Hour)
+	tr.ObserveWindow("openrouter", "m:free", Limit{Kind: Requests, Window: Day, Remaining: 0, Max: 50, ResetsAt: reset, CheckedAt: t0.Add(-time.Hour)}, t0)
+
+	u, ok := tr.Model("openrouter", "m:free")
+	if !ok || len(u.Limits) != 1 || !u.LastObserved.Equal(t0) {
+		t.Fatalf("usage = %+v ok=%v", u, ok)
+	}
+	if l := u.Limits[0]; !l.CheckedAt.Equal(t0) || l.Max != 50 || l.Window != Day {
+		t.Errorf("window = %+v; want checked_at %v (the caller's CheckedAt is ignored)", l, t0)
+	}
+	if _, ok := tr.Exhausted("openrouter", "m:free", t0); !ok {
+		t.Error("0 of 50 with a reset ahead should be exhausted")
+	}
+
+	// An older reading arriving late doesn't overwrite a newer one.
+	tr.ObserveWindow("openrouter", "m:free", Limit{Kind: Requests, Window: Day, Remaining: 40, Max: 50, ResetsAt: reset}, t0.Add(-time.Minute))
+	if _, ok := tr.Exhausted("openrouter", "m:free", t0); !ok {
+		t.Error("an older reading replaced a newer one")
+	}
+	tr.ObserveWindow("openrouter", "m:free", Limit{Kind: Requests, Window: Day, Remaining: 40, Max: 50, ResetsAt: reset}, t0.Add(time.Minute))
+	if _, ok := tr.Exhausted("openrouter", "m:free", t0.Add(time.Minute)); ok {
+		t.Error("a newer reading should replace the old one")
+	}
+}
+
+func TestObserveWindowIsPersisted(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "test.db")
+	s := openStore(t, path)
+	tr, err := Open(ctx, s, testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr.ObserveWindow("openrouter", "m:free", Limit{Kind: Requests, Window: Day, Remaining: 7, Max: 50, ResetsAt: t0.Add(time.Hour)}, t0)
+	if err := tr.Close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	s = openStore(t, path)
+	defer s.Close()
+	tr, err = Open(ctx, s, testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tr.Close(ctx)
+	u, ok := tr.Model("openrouter", "m:free")
+	if !ok || len(u.Limits) != 1 || u.Limits[0].Remaining != 7 || !u.Limits[0].CheckedAt.Equal(t0) {
+		t.Fatalf("after restart: %+v ok=%v", u, ok)
+	}
+}

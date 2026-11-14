@@ -209,6 +209,20 @@ func (t *Tracker) ObserveError(err error, now time.Time) {
 	t.applyLocked(ue.Provider, ue.Model, st, []Limit{l})
 }
 
+// ObserveWindow records one window that was read directly from a provider's
+// usage endpoint (OpenRouter's key endpoint), not from response headers. It
+// follows the same rules as Observe: the window's CheckedAt is set to now, a
+// reading older than the one held is dropped, memory is updated at once and
+// the database write is queued in the background. Any CheckedAt on l is
+// ignored.
+func (t *Tracker) ObserveWindow(provider, model string, l Limit, now time.Time) {
+	l.CheckedAt = now
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	st := t.stateLocked(provider, model, now)
+	t.applyLocked(provider, model, st, []Limit{l})
+}
+
 // Exhausted reports whether provider/model is known to be out of quota at
 // now. If several windows are exhausted it returns the one that lasts
 // longest, since that's when the model can be used again. Models with no
