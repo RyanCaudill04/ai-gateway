@@ -19,6 +19,17 @@ func openTemp(t *testing.T) *Store {
 	return s
 }
 
+// migrationCount is how many migrations ship, so these tests don't need
+// editing every time an issue adds one.
+func migrationCount(t *testing.T) int {
+	t.Helper()
+	migs, err := loadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(migs)
+}
+
 func TestMigrationsApplyOnceAndPing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
 	ctx := context.Background()
@@ -34,8 +45,8 @@ func TestMigrationsApplyOnceAndPing(t *testing.T) {
 		if err := s.Reader().QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
-		if n != 1 {
-			t.Fatalf("schema_migrations rows = %d, want 1", n)
+		if want := migrationCount(t); n != want {
+			t.Fatalf("schema_migrations rows = %d, want %d", n, want)
 		}
 		s.Close()
 	}

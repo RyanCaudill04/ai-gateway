@@ -4,6 +4,7 @@ go 1.27
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.62.0
 )
