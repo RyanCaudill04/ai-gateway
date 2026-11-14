@@ -74,7 +74,7 @@ CREATE TABLE rate_limits (
     PRIMARY KEY (provider, model, kind, window)
 ) WITHOUT ROWID;
 ```
-Only the latest value per window is kept (upsert); history lives in `request_log`. The router keeps an in-memory copy for routing decisions.
+Only the latest value per window is kept (upsert); history lives in `request_log`. The router keeps an in-memory copy for routing decisions; rows are written in the background (batched, latest value per window wins) and loaded at startup. NULL `limit`/`resets_at` = not reported. `resets_at` is rounded up to the whole second. A provider + model with no rows is `unknown`.
 
 ## 0005: provider_keys (#40)
 ```sql

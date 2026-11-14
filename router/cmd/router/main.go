@@ -27,6 +27,7 @@ import (
 	"github.com/RyanCaudill04/ai-gateway/router/internal/api"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/ratelimit"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
 )
 
@@ -83,6 +84,22 @@ func run(addr string) error {
 		return err
 	}
 	defer db.Close()
+
+	// Rate-limit windows from the last run are loaded now, so a day limit
+	// used up before a restart is still skipped after it. Deferred after
+	// db.Close, so it runs first: the last pending windows are written
+	// once the server has stopped and before the database closes.
+	limits, err := ratelimit.Open(context.Background(), db, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := limits.Close(ctx); err != nil {
+			slog.Error("saving rate limits on shutdown", "err", err)
+		}
+	}()
 
 	srv := &http.Server{
 		Addr:              addr,
