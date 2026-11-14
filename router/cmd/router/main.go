@@ -5,9 +5,13 @@
 //	router              start the server (listens on LISTEN_ADDR, default ":8080")
 //	router healthcheck  exit 0 if the running server's /healthz returns 200, else 1
 //	router backup <path>  write a consistent copy of the database to <path> (VACUUM INTO)
+//	router providers ...  register, list and remove provider API keys (see providers.go)
 //
 // The healthcheck subcommand exists because the runtime image has no shell or
 // curl, so Docker's HEALTHCHECK runs this same binary as the HTTP client.
+//
+// The server needs GATEWAY_SECRET_KEY (the master key that encrypts provider
+// keys); the subcommands don't.
 package main
 
 import (
@@ -24,50 +28,55 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/RyanCaudill04/ai-gateway/router/internal/admin"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/api"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/providerkeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
 )
 
+// commands are the subcommands. Each runs as a second process next to the
+// server (`docker compose exec router /router <command> ...`) and keeps its
+// family of subcommands in its own file.
+var commands = map[string]func(args []string) error{
+	"healthcheck": func([]string) error { return healthcheck(envOr("LISTEN_ADDR", ":8080")) },
+	"backup":      backup,
+	"providers":   providersCommand,
+}
+
 func main() {
-	addr := envOr("LISTEN_ADDR", ":8080")
-
-	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
-		if err := healthcheck(addr); err != nil {
-			fmt.Fprintln(os.Stderr, "unhealthy:", err)
+	if len(os.Args) > 1 {
+		name := os.Args[1]
+		cmd, ok := commands[name]
+		if !ok {
+			fmt.Fprintln(os.Stderr, "unknown command; available: healthcheck, backup, providers")
+			os.Exit(2)
+		}
+		if err := cmd(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if len(os.Args) > 1 && os.Args[1] == "backup" {
-		if err := backup(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "backup failed:", err)
-			os.Exit(1)
-		}
-		return
-	}
-
-	if err := run(addr); err != nil {
+	if err := run(envOr("LISTEN_ADDR", ":8080")); err != nil {
 		slog.Error("router stopped", "err", err)
 		os.Exit(1)
 	}
 }
 
-// run starts the HTTP server and blocks until it fails or gets SIGINT/SIGTERM
-// (what `docker compose stop` sends), then shuts down gracefully.
+// run starts the HTTP server and the loopback-only admin listener, and blocks
+// until one fails or the process gets SIGINT/SIGTERM (what `docker compose
+// stop` sends), then shuts both down gracefully.
 func run(addr string) error {
 	dbPath := envOr("DATABASE_PATH", "/data/gateway.db")
 
-	// A bad or missing providers file stops startup with the config package's
-	// error, which names each offending field.
-	cfg, err := config.LoadFile(envOr("PROVIDERS_CONFIG", "/config/providers.yaml"), os.Getenv, hasKey)
+	// The master key is checked before anything else, so a missing or
+	// malformed one stops startup with a message saying how to make one.
+	cipher, err := providerkeys.MasterKeyFromEnv(os.Getenv)
 	if err != nil {
 		return err
-	}
-	if disabled := cfg.DisabledProviders(); len(disabled) > 0 {
-		slog.Warn("providers disabled (no key registered)", "providers", disabled)
 	}
 
 	// Lock first: a second router on the same data dir must exit before it
@@ -84,9 +93,34 @@ func run(addr string) error {
 	}
 	defer db.Close()
 
+	keys, err := providerkeys.Load(context.Background(), db, cipher)
+	if err != nil {
+		return err
+	}
+
+	// A bad or missing providers file stops startup with the config package's
+	// error, which names each offending field.
+	cfg, err := config.LoadFile(envOr("PROVIDERS_CONFIG", "/config/providers.yaml"), os.Getenv, keys.Has)
+	if err != nil {
+		return err
+	}
+	if disabled := cfg.DisabledProviders(); len(disabled) > 0 {
+		slog.Warn("providers disabled (no key registered)", "providers", disabled)
+	}
+	enabled := providerEnabled(cfg, keys.Has)
+
+	adminLn, err := admin.Listen(envOr("ADMIN_ADDR", admin.DefaultAddr))
+	if err != nil {
+		return err
+	}
+	adminSrv := &http.Server{
+		Handler:           newAdminHandler(cfg, keys, enabled),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(newAuthenticator(), db, cfg, providerEnabled(cfg)),
+		Handler:           newHandler(newAuthenticator(), db, cfg, enabled),
 		ReadHeaderTimeout: 10 * time.Second,
 		// No WriteTimeout on purpose: streamed completions can run for minutes.
 	}
@@ -94,41 +128,39 @@ func run(addr string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 1)
+	// Buffered for both servers, so whichever returns second never blocks.
+	errCh := make(chan error, 2)
 	go func() {
 		slog.Info("router listening", "addr", addr)
 		errCh <- srv.ListenAndServe()
 	}()
+	go func() {
+		slog.Info("admin API listening (loopback only)", "addr", adminLn.Addr().String())
+		errCh <- adminSrv.Serve(adminLn)
+	}()
 
+	var serveErr error
 	select {
-	case err := <-errCh:
-		return err
+	case serveErr = <-errCh:
 	case <-ctx.Done():
 	}
 
 	slog.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return err
-	}
-	if err := <-errCh; !errors.Is(err, http.ErrServerClosed) {
-		return err
+	for _, err := range []error{serveErr, srv.Shutdown(shutdownCtx), adminSrv.Shutdown(shutdownCtx)} {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
 	}
 	return nil
 }
 
-// hasKey is the one place that knows whether a provider has a registered API
-// key. Until provider key storage lands (#40) nothing can be registered, so
-// only local providers are enabled. #40 replaces this body with a lookup in
-// the key store; startup and the request-time check below both use it.
-func hasKey(provider string) bool { return false }
-
 // providerEnabled answers "can this provider be used right now?" and is called
 // on every request, not once at startup, so a key registered while the router
 // runs takes effect without a restart. It mirrors the rule the config package
-// applies at load time (local, or has a key).
-func providerEnabled(cfg *config.Config) api.EnabledFunc {
+// applies at load time (local, or has a key). hasKey is the key store's Has.
+func providerEnabled(cfg *config.Config, hasKey func(provider string) bool) api.EnabledFunc {
 	return func(name string) bool {
 		p := cfg.Providers[name]
 		return p != nil && (p.Local || hasKey(name))

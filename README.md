@@ -42,10 +42,14 @@ services ──┘    │        │                            │          │
    ```bash
    git clone https://github.com/RyanCaudill04/ai-gateway.git && cd ai-gateway
    ```
-2. Create your environment file and add API keys for the providers you want (empty = disabled):
+2. Create your environment file and generate the master key that encrypts provider keys:
    ```bash
    cp .env.example .env
+   openssl rand -base64 32
    ```
+   Paste the output after `GATEWAY_SECRET_KEY=` in `.env`, and save a copy in a password manager.
+   The router won't start without it (see [Provider keys](#provider-keys)). Provider API keys
+   don't go in `.env`; you register them in step 5.
 3. Create your provider config:
    ```bash
    cp config/providers.example.yaml config/providers.yaml
@@ -60,7 +64,13 @@ services ──┘    │        │                            │          │
    docker compose up -d --build
    ```
    Prebuilt images use the tag from `IMAGE_TAG` in `.env` (default `stable`, the latest release).
-5. Open <http://localhost:8080> (or the `HTTP_PORT` you set). Check the API with:
+5. Register an API key for each provider you want to use (you're prompted for it; input is hidden):
+   ```bash
+   docker compose exec router /router providers set-key --test groq
+   docker compose exec router /router providers list
+   ```
+   See [Provider keys](#provider-keys) for the other commands.
+6. Open <http://localhost:8080> (or the `HTTP_PORT` you set). Check the API with:
    ```bash
    curl http://localhost:8080/api/health
    ```
@@ -86,6 +96,37 @@ Public access through a Cloudflare Tunnel (no ports opened on the host):
    ```bash
    curl https://ai.example.com/api/health
    ```
+
+## Provider keys
+Provider API keys (Groq, Gemini, OpenRouter, Workers AI, …) are registered in the running router and
+stored **encrypted** (AES-256-GCM) in its SQLite database, never in `.env` or `providers.yaml`. A provider
+is enabled once it has a key (local providers such as Ollama need none). Changes apply to the very
+next request; no restart.
+
+```bash
+# Register or replace a key. Prompts with hidden input; --test first checks the key
+# with one free call (listing the provider's models) and saves nothing if that fails.
+docker compose exec router /router providers set-key --test gemini
+
+# Or pipe it in (note -T), e.g. from a file you delete afterwards
+docker compose exec -T router /router providers set-key openrouter < openrouter-key.txt
+
+# Provider, enabled or not, key registered (last 4 characters only), last updated
+docker compose exec router /router providers list
+
+docker compose exec router /router providers remove-key groq
+```
+The provider name must be one in `config/providers.yaml`. Keys are never printed or logged; only their
+last 4 characters are shown.
+
+**The master key.** Stored keys are encrypted with `GATEWAY_SECRET_KEY` from `.env`, so a copied
+database or backup is useless without it. Keep a copy in a password manager. If you lose it (or change
+it), the stored keys can't be decrypted: the router still starts, `providers list` shows them as
+`unreadable`, and you register each one again.
+
+These commands talk to the running router over an admin API that listens only on `127.0.0.1:8081`
+inside the router container (`ADMIN_ADDR`). It isn't published, Caddy never routes to it, and the
+router refuses to start it on a non-loopback address. If the router isn't running, the commands say so.
 
 ## Authentication
 Every router endpoint except the health checks (`GET /api/health`, and the internal `/healthz`)
@@ -122,6 +163,10 @@ Prebuilt images:
 docker compose pull && docker compose up -d
 ```
 From source: `git pull && docker compose up -d --build`.
+
+**Upgrading from a version that read provider keys from `.env`:** add `GATEWAY_SECRET_KEY` to `.env`
+first (install step 2), or the new router won't start (the auto-updater will roll back). Then register
+your keys with `providers set-key` and delete the old `*_API_KEY` lines from `.env`.
 
 ### Automatic updates (optional)
 The `autoupdate` profile adds an `updater` service that checks GHCR every `UPDATE_INTERVAL` seconds
@@ -179,6 +224,10 @@ The `cat >` keeps the existing file's owner and permissions, so the router can s
 `rm` clears any leftover `-wal`/`-shm` files, which would otherwise be applied on top of the restored
 database. Check the volume name with `docker volume ls` if your project directory isn't `ai-gateway`.
 
+The provider keys in a backup can only be read with the same `GATEWAY_SECRET_KEY` that was in `.env`
+when they were registered. Restored with a different one, they show as `unreadable` in
+`providers list` and must be registered again.
+
 Run only **one** router at a time against a database (don't use `--scale router=N`), and keep the
 volume on local disk, not a network share. SQLite's file locking isn't reliable on network filesystems.
 
@@ -203,8 +252,15 @@ once, so other installs can pull without logging in.
 ## Development
 Run the pieces outside Docker for faster iteration:
 ```bash
-# router on :8081
-cd router && LISTEN_ADDR=:8081 DATABASE_PATH=./dev.db go run ./cmd/router
+# router on :8081 (its admin API moves to :8082 so the two don't collide). Use the same
+# GATEWAY_SECRET_KEY every time, or keys registered in dev.db become unreadable.
+export GATEWAY_SECRET_KEY=<output of openssl rand -base64 32>
+cd router && LISTEN_ADDR=:8081 ADMIN_ADDR=127.0.0.1:8082 DATABASE_PATH=./dev.db \
+  PROVIDERS_CONFIG=../config/providers.yaml go run ./cmd/router
+```
+```bash
+# register a key with the dev router
+cd router && ADMIN_ADDR=127.0.0.1:8082 go run ./cmd/router providers set-key groq
 ```
 ```bash
 # UI on :5173, proxies /v1 and /api to the router on :8081
