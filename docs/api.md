@@ -11,7 +11,7 @@ with extra fields for the UI.
 
 - **Virtual models** (`virtual: true`) are the routes in `config/providers.yaml`
   (`fast`, `long-context`, `private`, ...). Listed first, sorted by id.
-- **Real models** have ids like `groq/llama-3.3-70b-versatile`. Only models of
+- **Real models** have ids like `groq/openai/gpt-oss-120b`. Only models of
   enabled providers (a registered key, or `local: true`) are listed, sorted by id.
 - `context_length` is the largest prompt, in tokens, the model accepts. For a
   route it is the largest among its enabled entries, since the router skips an
@@ -60,11 +60,11 @@ the official SDKs parse it (`error.message`, `error.type`, `error.code` and
 ```json
 {
   "error": {
-    "message": "groq/llama-3.3-70b-versatile hit its daily request limit. It resets at 2026-11-14T00:00:00Z.",
+    "message": "groq/openai/gpt-oss-120b hit its daily request limit. It resets at 2026-11-14T00:00:00Z.",
     "type": "rate_limited",
     "code": "rate_limit_exceeded",
     "provider": "groq",
-    "model": "llama-3.3-70b-versatile",
+    "model": "openai/gpt-oss-120b",
     "limit_type": "requests",
     "window": "day",
     "resets_at": "2026-11-14T00:00:00Z"
@@ -129,7 +129,7 @@ Examples of the other types:
     "type": "context_length_exceeded",
     "code": "context_length_exceeded",
     "provider": "groq",
-    "model": "llama-3.3-70b-versatile"
+    "model": "openai/gpt-oss-120b"
   }
 }
 ```
@@ -141,7 +141,7 @@ Examples of the other types:
     "type": "provider_error",
     "code": "provider_error",
     "provider": "gemini",
-    "model": "gemini-2.5-flash"
+    "model": "gemini-3.5-flash-lite"
   }
 }
 ```
@@ -171,7 +171,7 @@ could work.
     "attempts": [
       {
         "provider": "groq",
-        "model": "llama-3.3-70b-versatile",
+        "model": "openai/gpt-oss-120b",
         "type": "rate_limited",
         "message": "Rate limit reached",
         "limit_type": "requests",
@@ -180,7 +180,7 @@ could work.
       },
       {
         "provider": "gemini",
-        "model": "gemini-2.5-flash",
+        "model": "gemini-3.5-flash-lite",
         "type": "provider_error",
         "message": "HTTP 503"
       }
