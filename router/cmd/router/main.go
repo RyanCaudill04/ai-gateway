@@ -4,6 +4,7 @@
 //
 //	router              start the server (listens on LISTEN_ADDR, default ":8080")
 //	router healthcheck  exit 0 if the running server's /healthz returns 200, else 1
+//	router backup <path>  write a consistent copy of the database to <path> (VACUUM INTO)
 //
 // The healthcheck subcommand exists because the runtime image has no shell or
 // curl, so Docker's HEALTHCHECK runs this same binary as the HTTP client.
@@ -23,8 +24,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/RyanCaudill04/ai-gateway/router/internal/api"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
 
 func main() {
@@ -33,6 +38,14 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		if err := healthcheck(addr); err != nil {
 			fmt.Fprintln(os.Stderr, "unhealthy:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		if err := backup(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "backup failed:", err)
 			os.Exit(1)
 		}
 		return
@@ -49,6 +62,16 @@ func main() {
 func run(addr string) error {
 	dbPath := envOr("DATABASE_PATH", "/data/gateway.db")
 
+	// A bad or missing providers file stops startup with the config package's
+	// error, which names each offending field.
+	cfg, err := config.LoadFile(envOr("PROVIDERS_CONFIG", "/config/providers.yaml"), os.Getenv, hasKey)
+	if err != nil {
+		return err
+	}
+	if disabled := cfg.DisabledProviders(); len(disabled) > 0 {
+		slog.Warn("providers disabled (no key registered)", "providers", disabled)
+	}
+
 	// Lock first: a second router on the same data dir must exit before it
 	// touches the database.
 	lock, err := store.AcquireLock(filepath.Join(filepath.Dir(dbPath), "router.lock"))
@@ -63,9 +86,17 @@ func run(addr string) error {
 	}
 	defer db.Close()
 
+	handler := newHandler(handlerDeps{
+		authn:       newAuthenticator(),
+		db:          db,
+		cfg:         cfg,
+		enabled:     providerEnabled(cfg),
+		upstream:    upstream.New(upstream.Options{}),
+		providerKey: providerKey,
+	})
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(newAuthenticator(), db),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		// No WriteTimeout on purpose: streamed completions can run for minutes.
 	}
@@ -97,14 +128,55 @@ func run(addr string) error {
 	return nil
 }
 
+// hasKey is the one place that knows whether a provider has a registered API
+// key. Until provider key storage lands (#40) nothing can be registered, so
+// only local providers are enabled. #40 replaces this body with a lookup in
+// the key store; startup and the request-time check below both use it.
+func hasKey(provider string) bool { return false }
+
+// providerKey returns a provider's API key for the chat endpoint. Like hasKey
+// it is a placeholder until key storage lands (#40), which replaces this body
+// with a lookup in the key store. Local providers never get here: they need
+// no key.
+func providerKey(provider string) (string, bool) { return "", false }
+
+// providerEnabled answers "can this provider be used right now?" and is called
+// on every request, not once at startup, so a key registered while the router
+// runs takes effect without a restart. It mirrors the rule the config package
+// applies at load time (local, or has a key).
+func providerEnabled(cfg *config.Config) api.EnabledFunc {
+	return func(name string) bool {
+		p := cfg.Providers[name]
+		return p != nil && (p.Local || hasKey(name))
+	}
+}
+
 // pinger is the part of the store /healthz needs. nil skips the check (tests).
 type pinger interface{ Ping(context.Context) error }
+
+// handlerDeps is everything the routes need. The chat hooks left nil mean
+// "nothing registered" (see api.ChatDeps), which is what tests use.
+type handlerDeps struct {
+	authn   auth.Authenticator
+	db      pinger
+	cfg     *config.Config
+	enabled api.EnabledFunc
+
+	upstream    *upstream.Client     // nil: a client with the default timeouts
+	providerKey api.KeyFunc          // provider API keys (#40); nil: none
+	observer    api.UpstreamObserver // rate-limit tracker (#16); nil: none
+	onSummary   api.SummaryFunc      // request log (#15); nil: none
+}
 
 // newHandler builds the router's routes. Access is deny-by-default: the only
 // public routes are the two health checks registered by name below. Every
 // other path, including ones that don't exist yet, goes through authn first,
 // so a new endpoint can't be left open by forgetting to protect it.
-func newHandler(authn auth.Authenticator, db pinger) http.Handler {
+func newHandler(d handlerDeps) http.Handler {
+	authn, db, cfg, enabled := d.authn, d.db, d.cfg, d.enabled
+	if d.upstream == nil {
+		d.upstream = upstream.New(upstream.Options{})
+	}
 	mux := http.NewServeMux()
 
 	// Internal only: Caddy forwards /v1/* and /api/* unchanged, so this
@@ -140,12 +212,25 @@ func newHandler(authn auth.Authenticator, db pinger) http.Handler {
 		json.NewEncoder(w).Encode(map[string]string{"email": id.Email})
 	})
 
+	protected.Handle("GET /v1/models", api.Models(cfg, enabled))
+	protected.Handle("POST /v1/chat/completions", api.Chat(api.ChatDeps{
+		Config:    cfg,
+		Enabled:   enabled,
+		Client:    d.upstream,
+		Key:       d.providerKey,
+		Observer:  d.observer,
+		OnSummary: d.onSummary,
+	}))
+
 	// The browser proves who it is with a cookie that it sends automatically,
 	// so another site could try to make it send requests here (CSRF). This
 	// rejects state-changing requests that a browser marks as cross-origin.
 	// Non-browser clients don't send those markers and are unaffected.
 	csrf := http.NewCrossOriginProtection()
-	mux.Handle("/", auth.Require(authn, csrf.Handler(protected)))
+	csrf.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apierror.Write(w, apierror.Forbidden("cross_origin_forbidden", "Cross-origin requests are not allowed."))
+	}))
+	mux.Handle("/", auth.Require(authn, csrf.Handler(apierror.Routes(protected))))
 
 	return mux
 }
