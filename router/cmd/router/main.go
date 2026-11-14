@@ -38,6 +38,7 @@ import (
 	"github.com/RyanCaudill04/ai-gateway/router/internal/poller"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/providerkeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/ratelimit"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/requestlog"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
@@ -151,6 +152,21 @@ func run(addr string) error {
 		}
 	}()
 
+	// The request log (#15). Shutdown order matters: the HTTP servers stop
+	// first (the Shutdown calls at the end of this function), so no request
+	// is still producing rows; then this deferred Close writes every queued
+	// row; then db.Close (deferred earlier, so it runs later). Closing the log
+	// before the servers would drop the last requests' rows; closing the
+	// database before the log would lose the queue.
+	reqLog := requestlog.Open(db, requestlog.Options{})
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := reqLog.Close(ctx); err != nil {
+			slog.Error("saving request log on shutdown", "err", err, "dropped", reqLog.Dropped(), "write_failed", reqLog.WriteFailed())
+		}
+	}()
+
 	adminLn, err := admin.Listen(envOr("ADMIN_ADDR", admin.DefaultAddr))
 	if err != nil {
 		return err
@@ -168,6 +184,7 @@ func run(addr string) error {
 		upstream:    upstream.New(upstream.Options{}),
 		providerKey: keys.Get,
 		apiKeys:     apiKeys,
+		onSummary:   reqLog.OnSummary,
 	})
 	srv := &http.Server{
 		Addr:              addr,

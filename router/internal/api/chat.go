@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apikeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
@@ -49,6 +50,7 @@ type Usage struct {
 // (#15). It deliberately holds no prompt or completion text, and nothing from
 // the request body except the requested model name.
 type RequestSummary struct {
+	Service        string // name of the calling service's API key; "" if the context has none
 	RequestedModel string // the client's `model`, e.g. "fast" or "groq/llama-3.3-70b-versatile"
 	Provider       string // provider used (or last attempted); "" if none was resolved
 	Model          string // that provider's own model ID
@@ -131,6 +133,7 @@ type chatRequest struct {
 func (h *chatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	sum := &RequestSummary{}
+	sum.Service, _ = apikeys.NameFrom(r.Context())
 	defer func() {
 		sum.Latency = time.Since(start)
 		// Metadata only: never the body, prompt or completion.

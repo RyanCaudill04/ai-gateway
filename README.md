@@ -181,6 +181,35 @@ docker compose exec router /router keys revoke mc-bot
   (rather than being stopped), the last few milliseconds of counts can be lost, so a key may get that
   many extra requests that day.
 
+## Request log
+Every chat completion (`POST /v1/chat/completions`) adds one row to the `request_log` table, and
+no response ever waits for it: rows go through a queue to a background writer that saves them in
+batches (every 100 rows or every second).
+
+- **Recorded:** time, service (the key's name), the model asked for, the provider and model that
+  answered, how many fallbacks were needed (`0` = the first provider answered), prompt and
+  completion token counts (empty when the provider doesn't report them), latency, HTTP status
+  (`499` = the client left first) and the error category (`rate_limited`, `provider_error`, ...).
+- **Never recorded:** prompts, completions, request or response bodies, or error messages (a
+  provider's message can quote the prompt). Tests fail if a field that could hold text is added.
+- **Not recorded:** `GET /v1/models`, and requests refused before reaching the chat handler (missing
+  or revoked key, over the daily cap).
+- If the disk can't keep up and the queue (4096 rows) fills, new rows are dropped, not queued, and the
+  router logs a `request log: queue full, rows dropped` warning with the count (at most once a
+  minute). A normal stop writes every queued row; a crash can lose about a second of rows.
+- Rows are kept forever for now; there is no cleanup job yet.
+
+Look at it from a backup (never open the live file with other tools while the router runs):
+```bash
+docker compose exec router /router backup /data/backups/look.db
+docker compose cp router:/data/backups/look.db ./look.db
+sqlite3 -header -column look.db "
+  SELECT service, provider, COUNT(*) AS requests,
+         SUM(status >= 400) AS errors, AVG(latency_ms) AS avg_ms,
+         SUM(COALESCE(prompt_tokens,0) + COALESCE(completion_tokens,0)) AS tokens
+  FROM request_log WHERE ts >= date('now', '-1 day') GROUP BY service, provider;"
+```
+
 ## Authentication
 Every router endpoint except the health checks (`GET /api/health`, and the internal `/healthz`)
 requires an authenticated caller. That includes paths that don't exist: an anonymous request gets `401`,
