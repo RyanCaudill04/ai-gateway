@@ -4,6 +4,7 @@
 //
 //	router              start the server (listens on LISTEN_ADDR, default ":8080")
 //	router healthcheck  exit 0 if the running server's /healthz returns 200, else 1
+//	router backup <path>  write a consistent copy of the database to <path> (VACUUM INTO)
 //
 // The healthcheck subcommand exists because the runtime image has no shell or
 // curl, so Docker's HEALTHCHECK runs this same binary as the HTTP client.
@@ -33,6 +34,14 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		if err := healthcheck(addr); err != nil {
 			fmt.Fprintln(os.Stderr, "unhealthy:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		if err := backup(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "backup failed:", err)
 			os.Exit(1)
 		}
 		return
