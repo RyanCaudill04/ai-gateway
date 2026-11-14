@@ -26,7 +26,7 @@ CREATE TABLE api_keys (
     name        TEXT NOT NULL UNIQUE,
     prefix      TEXT NOT NULL,          -- first chars, to recognise a key in lists
     key_hash    BLOB NOT NULL UNIQUE,   -- SHA-256 of the key; lookups are by hash
-    daily_cap   INTEGER,                -- NULL = no cap
+    daily_cap   INTEGER CHECK (daily_cap IS NULL OR daily_cap > 0), -- NULL = no cap
     created_at  TEXT NOT NULL,
     revoked_at  TEXT                    -- NULL = active
 );
@@ -37,7 +37,16 @@ CREATE TABLE api_key_usage (
     PRIMARY KEY (key_id, day)
 ) WITHOUT ROWID;
 ```
-Cap check is one upsert-and-read on the writer. A new day is a new row, so "resets daily" needs no job.
+A new day is a new row, so "resets daily" needs no job. The cap check doesn't touch the database:
+the router keeps every key and today's counts in memory, checks and counts a request in one step
+under a lock (exact under concurrency), and writes counts in the background (`MAX(requests, new)`
+upsert, batched). Counts are loaded back at startup. A crash can lose the counts admitted since the
+last write (milliseconds' worth), so that day the key may get that many extra requests; a normal
+shutdown writes everything.
+
+`prefix` is `sk-<name>-` plus the first 4 random characters, for `keys list`. A revoked key keeps its
+row; creating a key with a revoked key's name reuses that row (new hash, prefix, cap and `created_at`,
+`revoked_at` cleared), so today's count carries over and the old key can't come back.
 
 ## 0003: request_log (#15)
 ```sql
@@ -74,7 +83,7 @@ CREATE TABLE rate_limits (
     PRIMARY KEY (provider, model, kind, window)
 ) WITHOUT ROWID;
 ```
-Only the latest value per window is kept (upsert); history lives in `request_log`. The router keeps an in-memory copy for routing decisions.
+Only the latest value per window is kept (upsert); history lives in `request_log`. The router keeps an in-memory copy for routing decisions; rows are written in the background (batched, latest value per window wins) and loaded at startup. NULL `limit`/`resets_at` = not reported. `resets_at` is rounded up to the whole second. A provider + model with no rows is `unknown`.
 
 ## 0005: provider_keys (#40)
 ```sql
@@ -87,7 +96,11 @@ CREATE TABLE provider_keys (
     updated_at TEXT NOT NULL
 ) WITHOUT ROWID;
 ```
-Provider name is the GCM additional authenticated data, so a row can't be moved to another provider.
+Encrypted under `GATEWAY_SECRET_KEY` (32 bytes, base64, from `.env`). The GCM additional authenticated
+data is `"ai-gateway provider key v1\0" + provider`, so a row can't be moved to another provider. The
+router decrypts every row at startup and serves lookups from memory; a row that won't decrypt (wrong
+master key, or altered) is logged by provider name and left disabled until the key is set again. Writes
+go through the admin API (`router providers ...`), so the router stays the only writer.
 
 ## Later (not in Phase 3)
 Chat history for the UI (Phase 4) gets its own tables; `private` chats stay in this database only.

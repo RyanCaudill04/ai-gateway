@@ -4,9 +4,15 @@
 //
 //	router              start the server (listens on LISTEN_ADDR, default ":8080")
 //	router healthcheck  exit 0 if the running server's /healthz returns 200, else 1
+//	router backup <path>  write a consistent copy of the database to <path> (VACUUM INTO)
+//	router providers ...  register, list and remove provider API keys (see providers.go)
+//	router keys ...       create, list and revoke per-service API keys (see keys.go)
 //
 // The healthcheck subcommand exists because the runtime image has no shell or
 // curl, so Docker's HEALTHCHECK runs this same binary as the HTTP client.
+//
+// The server needs GATEWAY_SECRET_KEY (the master key that encrypts provider
+// keys); the subcommands don't.
 package main
 
 import (
@@ -23,31 +29,60 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/RyanCaudill04/ai-gateway/router/internal/admin"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/api"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apikeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/providerkeys"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/ratelimit"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
 )
 
-func main() {
-	addr := envOr("LISTEN_ADDR", ":8080")
+// commands are the subcommands. Each runs as a second process next to the
+// server (`docker compose exec router /router <command> ...`) and keeps its
+// family of subcommands in its own file.
+var commands = map[string]func(args []string) error{
+	"healthcheck": func([]string) error { return healthcheck(envOr("LISTEN_ADDR", ":8080")) },
+	"backup":      backup,
+	"providers":   providersCommand,
+	"keys":        keysCommand,
+}
 
-	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
-		if err := healthcheck(addr); err != nil {
-			fmt.Fprintln(os.Stderr, "unhealthy:", err)
+func main() {
+	if len(os.Args) > 1 {
+		name := os.Args[1]
+		cmd, ok := commands[name]
+		if !ok {
+			fmt.Fprintln(os.Stderr, "unknown command; available: healthcheck, backup, providers, keys")
+			os.Exit(2)
+		}
+		if err := cmd(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := run(addr); err != nil {
+	if err := run(envOr("LISTEN_ADDR", ":8080")); err != nil {
 		slog.Error("router stopped", "err", err)
 		os.Exit(1)
 	}
 }
 
-// run starts the HTTP server and blocks until it fails or gets SIGINT/SIGTERM
-// (what `docker compose stop` sends), then shuts down gracefully.
+// run starts the HTTP server and the loopback-only admin listener, and blocks
+// until one fails or the process gets SIGINT/SIGTERM (what `docker compose
+// stop` sends), then shuts both down gracefully.
 func run(addr string) error {
 	dbPath := envOr("DATABASE_PATH", "/data/gateway.db")
+
+	// The master key is checked before anything else, so a missing or
+	// malformed one stops startup with a message saying how to make one.
+	cipher, err := providerkeys.MasterKeyFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
 
 	// Lock first: a second router on the same data dir must exit before it
 	// touches the database.
@@ -63,9 +98,64 @@ func run(addr string) error {
 	}
 	defer db.Close()
 
+	keys, err := providerkeys.Load(context.Background(), db, cipher)
+	if err != nil {
+		return err
+	}
+
+	// A bad or missing providers file stops startup with the config package's
+	// error, which names each offending field.
+	cfg, err := config.LoadFile(envOr("PROVIDERS_CONFIG", "/config/providers.yaml"), os.Getenv, keys.Has)
+	if err != nil {
+		return err
+	}
+	if disabled := cfg.DisabledProviders(); len(disabled) > 0 {
+		slog.Warn("providers disabled (no key registered)", "providers", disabled)
+	}
+	enabled := providerEnabled(cfg, keys.Has)
+
+	// Rate-limit windows from the last run are loaded now, so a day limit
+	// used up before a restart is still skipped after it. Deferred after
+	// db.Close, so it runs first: the last pending windows are written
+	// once the server has stopped and before the database closes.
+	limits, err := ratelimit.Open(context.Background(), db, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := limits.Close(ctx); err != nil {
+			slog.Error("saving rate limits on shutdown", "err", err)
+		}
+	}()
+
+	// Service keys and today's counts. Deferred after db.Close, so it runs
+	// first: counts not yet written are saved once the server has stopped.
+	apiKeys, err := apikeys.Open(context.Background(), db)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := apiKeys.Close(ctx); err != nil {
+			slog.Error("saving api key usage on shutdown", "err", err)
+		}
+	}()
+
+	adminLn, err := admin.Listen(envOr("ADMIN_ADDR", admin.DefaultAddr))
+	if err != nil {
+		return err
+	}
+	adminSrv := &http.Server{
+		Handler:           newAdminHandler(cfg, keys, enabled, apiKeys),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(newAuthenticator(), db),
+		Handler:           newHandler(newAuthenticator(), db, cfg, enabled, apiKeys),
 		ReadHeaderTimeout: 10 * time.Second,
 		// No WriteTimeout on purpose: streamed completions can run for minutes.
 	}
@@ -73,28 +163,43 @@ func run(addr string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	errCh := make(chan error, 1)
+	// Buffered for both servers, so whichever returns second never blocks.
+	errCh := make(chan error, 2)
 	go func() {
 		slog.Info("router listening", "addr", addr)
 		errCh <- srv.ListenAndServe()
 	}()
+	go func() {
+		slog.Info("admin API listening (loopback only)", "addr", adminLn.Addr().String())
+		errCh <- adminSrv.Serve(adminLn)
+	}()
 
+	var serveErr error
 	select {
-	case err := <-errCh:
-		return err
+	case serveErr = <-errCh:
 	case <-ctx.Done():
 	}
 
 	slog.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return err
-	}
-	if err := <-errCh; !errors.Is(err, http.ErrServerClosed) {
-		return err
+	for _, err := range []error{serveErr, srv.Shutdown(shutdownCtx), adminSrv.Shutdown(shutdownCtx)} {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
 	}
 	return nil
+}
+
+// providerEnabled answers "can this provider be used right now?" and is called
+// on every request, not once at startup, so a key registered while the router
+// runs takes effect without a restart. It mirrors the rule the config package
+// applies at load time (local, or has a key). hasKey is the key store's Has.
+func providerEnabled(cfg *config.Config, hasKey func(provider string) bool) api.EnabledFunc {
+	return func(name string) bool {
+		p := cfg.Providers[name]
+		return p != nil && (p.Local || hasKey(name))
+	}
 }
 
 // pinger is the part of the store /healthz needs. nil skips the check (tests).
@@ -102,9 +207,26 @@ type pinger interface{ Ping(context.Context) error }
 
 // newHandler builds the router's routes. Access is deny-by-default: the only
 // public routes are the two health checks registered by name below. Every
-// other path, including ones that don't exist yet, goes through authn first,
-// so a new endpoint can't be left open by forgetting to protect it.
-func newHandler(authn auth.Authenticator, db pinger) http.Handler {
+// other path, including ones that don't exist yet, is caught by one of two
+// subtrees, each behind its own check, so a new endpoint can't be left open
+// by forgetting to protect it:
+//
+//   - /v1/* (the OpenAI-compatible API, called by services): a service API
+//     key from `router keys create`, sent as "Authorization: Bearer <key>",
+//     checked by apikeys.Require, which also enforces the key's daily cap.
+//     That is the only check. No Cloudflare Access token is needed or looked
+//     at, in every AUTH_MODE: with AUTH_MODE=none a key is still required,
+//     and misconfigured Access settings ("locked") lock /api/* only. No CSRF
+//     check either: it exists because browsers attach cookies on their own,
+//     and they never attach an Authorization header on their own, so a page
+//     on another site can't make a browser send a key it doesn't have.
+//   - everything else, /api/* in practice (the UI): authn (Cloudflare Access,
+//     or nobody with AUTH_MODE=none) plus CSRF protection, as before. An API
+//     key alone gets nowhere here.
+//
+// Register /v1 routes on v1 and every other route on protected. A /v1 route
+// put on protected would never be reached: the /v1/ subtree catches it first.
+func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled api.EnabledFunc, keys *apikeys.Store) http.Handler {
 	mux := http.NewServeMux()
 
 	// Internal only: Caddy forwards /v1/* and /api/* unchanged, so this
@@ -130,6 +252,15 @@ func newHandler(authn auth.Authenticator, db pinger) http.Handler {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
+	// Everything registered on this mux requires a valid service API key.
+	v1 := http.NewServeMux()
+	v1.Handle("GET /v1/models", api.Models(cfg, enabled))
+	v1Handler := apikeys.Require(keys, apierror.Routes(v1))
+	mux.Handle("/v1/", v1Handler)
+	// Bare "/v1" too, or the mux would answer it with an unauthenticated
+	// redirect to "/v1/".
+	mux.Handle("/v1", v1Handler)
+
 	// Everything registered on this mux requires an authenticated caller.
 	protected := http.NewServeMux()
 	// Who the router thinks is calling. Lets the UI tell "signed in" from "not".
@@ -145,7 +276,10 @@ func newHandler(authn auth.Authenticator, db pinger) http.Handler {
 	// rejects state-changing requests that a browser marks as cross-origin.
 	// Non-browser clients don't send those markers and are unaffected.
 	csrf := http.NewCrossOriginProtection()
-	mux.Handle("/", auth.Require(authn, csrf.Handler(protected)))
+	csrf.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apierror.Write(w, apierror.Forbidden("cross_origin_forbidden", "Cross-origin requests are not allowed."))
+	}))
+	mux.Handle("/", auth.Require(authn, csrf.Handler(apierror.Routes(protected))))
 
 	return mux
 }
@@ -160,7 +294,7 @@ func newAuthenticator() auth.Authenticator {
 		return auth.Locked(err)
 	}
 	if cfg.Mode == auth.ModeNone {
-		slog.Warn("AUTH_MODE=none: authentication is DISABLED. Never expose this instance to a network you don't trust.")
+		slog.Warn("AUTH_MODE=none: authentication of /api/* is DISABLED (/v1/* still needs an API key). Never expose this instance to a network you don't trust.")
 		return auth.Disabled()
 	}
 	slog.Info("auth: Cloudflare Access", "team_domain", cfg.TeamDomain, "allowed_emails", len(cfg.AllowedEmails))
