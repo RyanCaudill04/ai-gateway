@@ -52,22 +52,29 @@ row; creating a key with a revoked key's name reuses that row (new hash, prefix,
 ```sql
 CREATE TABLE request_log (
     id                INTEGER PRIMARY KEY,
-    ts                TEXT NOT NULL,
+    ts                TEXT NOT NULL,    -- when the request arrived (UTC, whole seconds)
     service           TEXT NOT NULL,    -- key name (copied, so it survives key deletion)
     requested_model   TEXT NOT NULL,
     provider          TEXT,             -- NULL if no upstream was reached
     model             TEXT,
-    fallback_attempts INTEGER NOT NULL DEFAULT 0,
-    prompt_tokens     INTEGER,
+    fallback_attempts INTEGER NOT NULL DEFAULT 0, -- providers tried after the first; 0 = none
+    prompt_tokens     INTEGER,          -- NULL = the provider didn't report counts
     completion_tokens INTEGER,
     latency_ms        INTEGER NOT NULL,
-    status            INTEGER NOT NULL,
-    error_type        TEXT
+    status            INTEGER NOT NULL, -- HTTP status sent; 499 = client left first
+    error_type        TEXT              -- NULL on success
 );
 CREATE INDEX request_log_ts ON request_log (ts);
 CREATE INDEX request_log_service_ts ON request_log (service, ts);
 ```
-Written in batches by one goroutine. `service` is text rather than a foreign key on purpose: revoking or deleting a key must not rewrite history.
+Written in batches by one goroutine (`router/internal/requestlog`). `service` is text rather than a foreign key on purpose: revoking or deleting a key must not rewrite history.
+
+- One row per chat completion, written when the request ends. `ts` is the arrival time (end time minus latency). Not logged: `GET /v1/models`, and requests refused by the key check (401, over the daily cap).
+- `fallback_attempts` is the number of *fallbacks*: upstream calls minus one (the chat handler's `Attempts` counts calls, so 1 call = 0). A request that failed before any provider was tried is also 0; `provider` is NULL then.
+- `error_type` is the router's error category (`rate_limited`, `provider_error`, ...), never a message, because provider messages can quote the prompt. A stream that fails after it started has `status` 200 and an `error_type`.
+- No column holds prompt or completion text, and none may be added (a test checks the entry type's fields).
+- Under overload (queue full) or a failed write, rows are dropped and counted, never waited for. A crash can lose the last second or so of queued rows.
+- No retention yet: rows are kept until a cleanup job exists.
 
 ## 0004: rate_limits (#16)
 ```sql
