@@ -17,9 +17,12 @@ func (l *Logger) OnSummary(s api.RequestSummary) {
 // entryFrom converts a finished request's summary. arrived is when the log
 // saw it; the request started Latency earlier.
 //
-// FallbackAttempts is Attempts - 1: the summary counts upstream calls (1 = the
-// first provider answered), the log counts how many times the router had to
-// fall back. 0 attempts (failed before any provider was tried) is also 0.
+// FallbackAttempts is the number of route entries that did not answer: the
+// summary's Fallback list, which holds every entry that failed or was skipped
+// because it was known to be out of quota. Skips count, since on free tiers
+// "the first provider was already exhausted" is the usual reason a request
+// lands on the second one, and it costs no upstream call. A pinned model
+// never falls back, so it is always 0.
 func entryFrom(s api.RequestSummary, finished time.Time) Entry {
 	e := Entry{
 		Time:             finished.Add(-s.Latency),
@@ -27,7 +30,7 @@ func entryFrom(s api.RequestSummary, finished time.Time) Entry {
 		RequestedModel:   s.RequestedModel,
 		Provider:         s.Provider,
 		Model:            s.Model,
-		FallbackAttempts: max(s.Attempts-1, 0),
+		FallbackAttempts: len(s.Fallback),
 		PromptTokens:     Unknown,
 		CompletionTokens: Unknown,
 		Latency:          s.Latency,

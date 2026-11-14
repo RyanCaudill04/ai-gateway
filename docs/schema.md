@@ -57,7 +57,7 @@ CREATE TABLE request_log (
     requested_model   TEXT NOT NULL,
     provider          TEXT,             -- NULL if no upstream was reached
     model             TEXT,
-    fallback_attempts INTEGER NOT NULL DEFAULT 0, -- providers tried after the first; 0 = none
+    fallback_attempts INTEGER NOT NULL DEFAULT 0, -- route entries that failed or were skipped; 0 = none
     prompt_tokens     INTEGER,          -- NULL = the provider didn't report counts
     completion_tokens INTEGER,
     latency_ms        INTEGER NOT NULL,
@@ -70,7 +70,7 @@ CREATE INDEX request_log_service_ts ON request_log (service, ts);
 Written in batches by one goroutine (`router/internal/requestlog`). `service` is text rather than a foreign key on purpose: revoking or deleting a key must not rewrite history.
 
 - One row per chat completion, written when the request ends. `ts` is the arrival time (end time minus latency). Not logged: `GET /v1/models`, and requests refused by the key check (401, over the daily cap).
-- `fallback_attempts` is the number of *fallbacks*: upstream calls minus one (the chat handler's `Attempts` counts calls, so 1 call = 0). A request that failed before any provider was tried is also 0; `provider` is NULL then.
+- `fallback_attempts` is the number of route entries that did not answer: ones that were called and failed, and ones skipped because they were already known to be out of quota (the same entries the `x-router-fallback` header lists). 0 means the first entry answered, or the model was pinned. When every entry failed it is the number of entries tried.
 - `error_type` is the router's error category (`rate_limited`, `provider_error`, ...), never a message, because provider messages can quote the prompt. A stream that fails after it started has `status` 200 and an `error_type`.
 - No column holds prompt or completion text, and none may be added (a test checks the entry type's fields).
 - Under overload (queue full) or a failed write, rows are dropped and counted, never waited for. A crash can lose the last second or so of queued rows.

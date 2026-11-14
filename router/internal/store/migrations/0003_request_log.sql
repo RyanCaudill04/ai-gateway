@@ -10,7 +10,7 @@ CREATE TABLE request_log (
     requested_model   TEXT NOT NULL,
     provider          TEXT,             -- NULL if no upstream was reached
     model             TEXT,
-    fallback_attempts INTEGER NOT NULL DEFAULT 0, -- providers tried after the first; 0 = none
+    fallback_attempts INTEGER NOT NULL DEFAULT 0, -- route entries that failed or were skipped; 0 = none
     prompt_tokens     INTEGER,          -- NULL = the provider didn't report counts
     completion_tokens INTEGER,
     latency_ms        INTEGER NOT NULL,

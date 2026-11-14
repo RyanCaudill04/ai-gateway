@@ -36,7 +36,7 @@ type Entry struct {
 	RequestedModel   string    // the client's `model`: "fast", "groq/llama-3.3-70b-versatile"
 	Provider         string    // provider used, or last attempted; "" if none
 	Model            string    // that provider's own model ID
-	FallbackAttempts int       // providers tried after the first; 0 = the first one answered (or none was tried)
+	FallbackAttempts int       // route entries that failed or were skipped; 0 = the first one answered, or a pinned model
 	PromptTokens     int       // Unknown when not reported
 	CompletionTokens int       // Unknown when not reported
 	Latency          time.Duration

@@ -144,7 +144,11 @@ func TestEntryFromSummary(t *testing.T) {
 			Latency: 2 * time.Second, Usage: &api.Usage{PromptTokens: 3, CompletionTokens: 4}},
 			Entry{Time: finished.Add(-2 * time.Second), Service: "a", RequestedModel: "fast", Provider: "groq", Model: "big", FallbackAttempts: 0,
 				PromptTokens: 3, CompletionTokens: 4, Latency: 2 * time.Second, Status: 200}},
-		{"two fallbacks", api.RequestSummary{Attempts: 3, Status: 200},
+		// One entry was called and failed, one was skipped without a call:
+		// both count, though only two upstream calls were made.
+		{"two fallbacks", api.RequestSummary{Attempts: 2, Status: 200, Fallback: []api.FallbackAttempt{
+			{Provider: "groq", Model: "big", Reason: api.ReasonRateLimitedDay, Called: false},
+			{Provider: "gemini", Model: "flash", Reason: api.ReasonProviderError, Called: true}}},
 			Entry{Time: finished, FallbackAttempts: 2, PromptTokens: Unknown, CompletionTokens: Unknown, Status: 200}},
 		{"nothing tried", api.RequestSummary{Attempts: 0, Status: 400, ErrorType: apierror.TypeRateLimited},
 			Entry{Time: finished, FallbackAttempts: 0, PromptTokens: Unknown, CompletionTokens: Unknown, Status: 400, ErrorType: "rate_limited"}},

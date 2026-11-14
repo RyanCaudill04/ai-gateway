@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/ratelimit"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
 
@@ -64,15 +66,29 @@ type observation struct {
 	err             *upstream.Error
 }
 
+// recorder is the handler's rate-limit tracker in tests: a real in-memory
+// tracker, plus a record of everything the handler told it.
 type recorder struct {
+	*ratelimit.Tracker
 	mu  sync.Mutex
 	obs []observation
 }
 
-func (r *recorder) ObserveUpstream(provider, model string, h http.Header, err *upstream.Error) {
+func (r *recorder) Observe(provider, model string, h http.Header, now time.Time) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.obs = append(r.obs, observation{provider, model, h, err})
+	r.obs = append(r.obs, observation{provider, model, h, nil})
+	r.mu.Unlock()
+	r.Tracker.Observe(provider, model, h, now)
+}
+
+func (r *recorder) ObserveError(err error, now time.Time) {
+	var ue *upstream.Error
+	if errors.As(err, &ue) {
+		r.mu.Lock()
+		r.obs = append(r.obs, observation{ue.Provider, ue.Model, ue.Header, ue})
+		r.mu.Unlock()
+	}
+	r.Tracker.ObserveError(err, now)
 }
 
 func (r *recorder) all() []observation {
@@ -81,43 +97,139 @@ func (r *recorder) all() []observation {
 	return slices.Clone(r.obs)
 }
 
+// clock is the handler's clock in tests: real time plus an offset a test can
+// grow, to get past a rate-limit reset without waiting for it.
+type clock struct {
+	mu     sync.Mutex
+	offset time.Duration
+}
+
+func (c *clock) now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return time.Now().Add(c.offset)
+}
+
+func (c *clock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.offset += d
+}
+
+// fakeProviders is the fake upstream: one handler per provider, picked by the
+// first path segment of the request (each provider's base_url has its own).
+// A test can swap a provider's behaviour between requests.
+type fakeProviders struct {
+	mu       sync.Mutex
+	handlers map[string]http.HandlerFunc
+	fallback http.HandlerFunc // for providers without their own handler
+}
+
+func (p *fakeProviders) set(provider string, h http.HandlerFunc) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.handlers == nil {
+		p.handlers = map[string]http.HandlerFunc{}
+	}
+	p.handlers[provider] = h
+}
+
+func (p *fakeProviders) handler(provider string) http.HandlerFunc {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if h := p.handlers[provider]; h != nil {
+		return h
+	}
+	if p.fallback != nil {
+		return p.fallback
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "the test set no handler for "+provider, http.StatusTeapot)
+	}
+}
+
 type fixture struct {
-	router *httptest.Server
-	calls  chan upstreamCall
-	obs    *recorder
-	sums   chan RequestSummary
+	handler http.Handler // the chat handler itself, for calls without a network
+	router  *httptest.Server
+	up      *fakeProviders
+	calls   chan upstreamCall
+	obs     *recorder
+	clock   *clock
+	sums    chan RequestSummary
+}
+
+// fixtureOpts are the knobs of a fixture; the zero value is what most tests
+// want.
+type fixtureOpts struct {
+	yaml    string           // providers config; "": chatYAML
+	enabled []string         // enabled providers; none: all
+	noKey   []string         // providers whose key lookup fails
+	budget  time.Duration    // ChatDeps.RouteBudget
+	client  upstream.Options // upstream timeouts
+	all     http.HandlerFunc // handler for every provider without its own
+	each    map[string]http.HandlerFunc
 }
 
 // newFixture starts a fake upstream running h (after recording the call) and
 // a router in front of it. enabled lists the enabled providers; none means all.
 func newFixture(t *testing.T, h http.HandlerFunc, enabled ...string) *fixture {
 	t.Helper()
-	f := &fixture{calls: make(chan upstreamCall, 8), obs: &recorder{}, sums: make(chan RequestSummary, 8)}
+	return newFixtureWith(t, fixtureOpts{all: h, enabled: enabled})
+}
+
+func newFixtureWith(t *testing.T, o fixtureOpts) *fixture {
+	t.Helper()
+	f := &fixture{
+		up:    &fakeProviders{fallback: o.all},
+		calls: make(chan upstreamCall, 64),
+		clock: &clock{},
+		sums:  make(chan RequestSummary, 64),
+	}
+	for name, h := range o.each {
+		f.up.set(name, h)
+	}
 
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c := upstreamCall{auth: r.Header.Get("Authorization")}
 		c.provider, _, _ = strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
 		json.NewDecoder(r.Body).Decode(&c.body)
 		f.calls <- c
-		h(w, r)
+		f.up.handler(c.provider)(w, r)
 	}))
 	t.Cleanup(up.Close)
 
-	cfg, err := config.Parse([]byte(chatYAML), func(string) string { return up.URL }, nil)
+	if o.yaml == "" {
+		o.yaml = chatYAML
+	}
+	cfg, err := config.Parse([]byte(o.yaml), func(string) string { return up.URL }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	isEnabled := func(p string) bool { return len(enabled) == 0 || slices.Contains(enabled, p) }
-	keys := map[string]string{"groq": "k-groq", "gemini": "k-gemini"}
+	// A nil database keeps the tracker in memory: the api package is tested
+	// without SQLite.
+	tracker, err := ratelimit.Open(context.Background(), nil, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.obs = &recorder{Tracker: tracker}
 
-	f.router = httptest.NewServer(Chat(ChatDeps{
-		Config:    cfg,
-		Enabled:   isEnabled,
-		Client:    upstream.New(upstream.Options{}),
-		Key:       func(p string) (string, bool) { k, ok := keys[p]; return k, ok },
-		Observer:  f.obs,
-		OnSummary: func(s RequestSummary) { f.sums <- s },
-	}))
+	deps := ChatDeps{
+		Config:  cfg,
+		Enabled: func(p string) bool { return len(o.enabled) == 0 || slices.Contains(o.enabled, p) },
+		Client:  upstream.New(o.client),
+		Key: func(p string) (string, bool) {
+			if cfg.Providers[p] == nil || cfg.Providers[p].Local || slices.Contains(o.noKey, p) {
+				return "", false
+			}
+			return "k-" + p, true
+		},
+		Limits:      f.obs,
+		OnSummary:   func(s RequestSummary) { f.sums <- s },
+		RouteBudget: o.budget,
+		Now:         f.clock.now,
+	}
+	f.handler = Chat(deps)
+	f.router = httptest.NewServer(f.handler)
 	t.Cleanup(f.router.Close)
 	return f
 }

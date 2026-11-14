@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
 
@@ -60,14 +59,9 @@ func (h *chatHandler) writeStream(w http.ResponseWriter, r *http.Request, ans *a
 		return send(buf)
 	}
 
-	// The first event was read during the attempt. Without one the stream
-	// was empty and only [DONE] remains.
-	if ans.first == nil {
-		if !send(doneEvent) {
-			sum.ClientGone = true
-		}
-		return
-	}
+	// The first event was read during the attempt. From this write on, the
+	// client has seen part of an answer, so nothing below may fall back to
+	// another provider: a failure is reported in the stream instead.
 	if !sendEvent(ans.first) {
 		sum.ClientGone = true
 		return
@@ -100,10 +94,11 @@ func (h *chatHandler) writeStream(w http.ResponseWriter, r *http.Request, ans *a
 				ue = &upstream.Error{Kind: upstream.KindProvider, Provider: ans.target.provider.Name,
 					Model: ans.target.model.ID, Message: "stream failed"}
 			}
-			h.Observer.ObserveUpstream(ue.Provider, ue.Model, ue.Header, ue)
-			slog.Warn("chat: provider failed mid-stream", "provider", ue.Provider, "model", ue.Model,
-				"kind", ue.Kind, "status", ue.Status, "message", ue.Message)
-			e := apierror.FromUpstream(ue, apierror.LimitHint{})
+			h.observeErr(ue)
+			slog.Log(r.Context(), failureLevel(ue), "chat: provider failed mid-stream", failureAttrs(ue)...)
+			// Asked after the tracker has seen the failure, so a rate limit
+			// carries its limit type, window and reset like any other.
+			e := h.providerError(ue)
 			sum.ErrorType = e.Type
 			if !send(e.SSE()) {
 				sum.ClientGone = true
