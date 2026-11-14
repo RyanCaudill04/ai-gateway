@@ -79,7 +79,7 @@ func wantEnvelope(t *testing.T, w *httptest.ResponseRecorder, typ, code string) 
 }
 
 func TestOnlyHealthChecksArePublic(t *testing.T) {
-	h := newHandler(denyAll{}, nil, testConfig(t), allEnabled)
+	h := newHandler(handlerDeps{authn: denyAll{}, cfg: testConfig(t), enabled: allEnabled})
 
 	for _, path := range []string{"/healthz", "/api/health"} {
 		if w := do(h, "GET", path); w.Code != http.StatusOK {
@@ -107,7 +107,7 @@ func TestOnlyHealthChecksArePublic(t *testing.T) {
 }
 
 func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
-	h := newHandler(auth.Locked(errors.New("CF_ACCESS_AUD is empty")), nil, testConfig(t), allEnabled)
+	h := newHandler(handlerDeps{authn: auth.Locked(errors.New("CF_ACCESS_AUD is empty")), cfg: testConfig(t), enabled: allEnabled})
 
 	if w := do(h, "GET", "/api/health"); w.Code != http.StatusOK {
 		t.Errorf("GET /api/health = %d, want 200", w.Code)
@@ -123,11 +123,11 @@ func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
 }
 
 func TestModelsEndpointRequiresAuthAndListsModels(t *testing.T) {
-	if w := do(newHandler(denyAll{}, nil, testConfig(t), allEnabled), "GET", "/v1/models"); w.Code != http.StatusUnauthorized {
+	if w := do(newHandler(handlerDeps{authn: denyAll{}, cfg: testConfig(t), enabled: allEnabled}), "GET", "/v1/models"); w.Code != http.StatusUnauthorized {
 		t.Errorf("unauthenticated GET /v1/models = %d, want 401", w.Code)
 	}
 
-	w := do(newHandler(auth.Disabled(), nil, testConfig(t), allEnabled), "GET", "/v1/models")
+	w := do(newHandler(handlerDeps{authn: auth.Disabled(), cfg: testConfig(t), enabled: allEnabled}), "GET", "/v1/models")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"id":"groq/llama"`) {
 		t.Errorf("GET /v1/models = %d %s", w.Code, w.Body)
 	}
@@ -164,7 +164,7 @@ func TestRunStopsOnBadProvidersConfig(t *testing.T) {
 }
 
 func TestAuthenticatedRequests(t *testing.T) {
-	h := newHandler(auth.Disabled(), nil, testConfig(t), allEnabled)
+	h := newHandler(handlerDeps{authn: auth.Disabled(), cfg: testConfig(t), enabled: allEnabled})
 
 	w := do(h, "GET", "/api/me")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"email"`) {
@@ -191,6 +191,19 @@ func TestAuthenticatedRequests(t *testing.T) {
 	}
 }
 
+// The chat endpoint is registered behind auth: once signed in, an unknown
+// model reaches the handler and gets its 404 rather than the mux's.
+func TestChatCompletionsIsRegistered(t *testing.T) {
+	h := newHandler(handlerDeps{authn: auth.Disabled(), cfg: testConfig(t), enabled: allEnabled})
+	r := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(`{"model":"nope","messages":[]}`))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", w.Code, w.Body)
+	}
+	wantEnvelope(t, w, "invalid_request", "model_not_found")
+}
+
 type forbidAll struct{}
 
 func (forbidAll) Authenticate(*http.Request) (auth.Identity, error) {
@@ -198,7 +211,7 @@ func (forbidAll) Authenticate(*http.Request) (auth.Identity, error) {
 }
 
 func TestForbiddenCallerGetsEnvelope(t *testing.T) {
-	w := do(newHandler(forbidAll{}, nil, testConfig(t), allEnabled), "GET", "/v1/models")
+	w := do(newHandler(handlerDeps{authn: forbidAll{}, cfg: testConfig(t), enabled: allEnabled}), "GET", "/v1/models")
 	if w.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", w.Code)
 	}
