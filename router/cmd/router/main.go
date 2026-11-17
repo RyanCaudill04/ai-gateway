@@ -23,7 +23,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/RyanCaudill04/ai-gateway/router/internal/api"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
 )
 
@@ -49,6 +51,16 @@ func main() {
 func run(addr string) error {
 	dbPath := envOr("DATABASE_PATH", "/data/gateway.db")
 
+	// A bad or missing providers file stops startup with the config package's
+	// error, which names each offending field.
+	cfg, err := config.LoadFile(envOr("PROVIDERS_CONFIG", "/config/providers.yaml"), os.Getenv, hasKey)
+	if err != nil {
+		return err
+	}
+	if disabled := cfg.DisabledProviders(); len(disabled) > 0 {
+		slog.Warn("providers disabled (no key registered)", "providers", disabled)
+	}
+
 	// Lock first: a second router on the same data dir must exit before it
 	// touches the database.
 	lock, err := store.AcquireLock(filepath.Join(filepath.Dir(dbPath), "router.lock"))
@@ -65,7 +77,7 @@ func run(addr string) error {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(newAuthenticator(), db),
+		Handler:           newHandler(newAuthenticator(), db, cfg, providerEnabled(cfg)),
 		ReadHeaderTimeout: 10 * time.Second,
 		// No WriteTimeout on purpose: streamed completions can run for minutes.
 	}
@@ -97,6 +109,23 @@ func run(addr string) error {
 	return nil
 }
 
+// hasKey is the one place that knows whether a provider has a registered API
+// key. Until provider key storage lands (#40) nothing can be registered, so
+// only local providers are enabled. #40 replaces this body with a lookup in
+// the key store; startup and the request-time check below both use it.
+func hasKey(provider string) bool { return false }
+
+// providerEnabled answers "can this provider be used right now?" and is called
+// on every request, not once at startup, so a key registered while the router
+// runs takes effect without a restart. It mirrors the rule the config package
+// applies at load time (local, or has a key).
+func providerEnabled(cfg *config.Config) api.EnabledFunc {
+	return func(name string) bool {
+		p := cfg.Providers[name]
+		return p != nil && (p.Local || hasKey(name))
+	}
+}
+
 // pinger is the part of the store /healthz needs. nil skips the check (tests).
 type pinger interface{ Ping(context.Context) error }
 
@@ -104,7 +133,7 @@ type pinger interface{ Ping(context.Context) error }
 // public routes are the two health checks registered by name below. Every
 // other path, including ones that don't exist yet, goes through authn first,
 // so a new endpoint can't be left open by forgetting to protect it.
-func newHandler(authn auth.Authenticator, db pinger) http.Handler {
+func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled api.EnabledFunc) http.Handler {
 	mux := http.NewServeMux()
 
 	// Internal only: Caddy forwards /v1/* and /api/* unchanged, so this
@@ -139,6 +168,8 @@ func newHandler(authn auth.Authenticator, db pinger) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		json.NewEncoder(w).Encode(map[string]string{"email": id.Email})
 	})
+
+	protected.Handle("GET /v1/models", api.Models(cfg, enabled))
 
 	// The browser proves who it is with a cookie that it sends automatically,
 	// so another site could try to make it send requests here (CSRF). This
