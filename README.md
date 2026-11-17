@@ -140,24 +140,44 @@ docker compose logs -f updater
 - The updater mounts the project directory at the same absolute path as on the host (`GATEWAY_DIR`,
   defaulting to the directory you ran compose from). Set `GATEWAY_DIR` in `.env` if you start compose from elsewhere.
 - Only `router` and `ui` are updated; changes to `docker-compose.yml` itself still need a manual `git pull`.
-- The database is **not** backed up before updates yet (waiting on `router backup`, issue #19), so
-  back it up yourself (see Data) if a release changes the schema.
+- The database is **not** backed up automatically before updates, so run a backup yourself (see Data)
+  if a release changes the schema.
 - **Security:** the updater mounts `/var/run/docker.sock`, which gives that container root-equivalent
   access to the host. Only enable it if you accept that.
 
 ## Data
 The SQLite database lives in the `router-data` Docker volume (`/data/gateway.db` inside the router).
 
-Back it up (stop the router first so the database and its `-wal` file are consistent):
+### Backup
+Back up while the router is running. `router backup` writes a consistent copy with SQLite's
+`VACUUM INTO`, so nothing has to stop:
 ```bash
-docker compose stop router
+docker compose exec router /router backup /data/backups/gateway-$(date +%Y%m%d).db
+```
+The copy is written to `/data/backups/` inside the volume. Copy it to the host with:
+```bash
+docker compose cp router:/data/backups ./backups
+```
+A backup never overwrites an existing file, so give each one a new name (the date works for daily backups).
+
+### Restore
+Restoring replaces the live database, so stop the stack first. Put the backup you want back in the
+volume (skip the first command if it's already in `/data/backups`), then swap the database file:
+```bash
+docker compose stop
 ```
 ```bash
-docker compose cp router:/data ./backup
+docker compose cp ./backups/gateway-20261113.db router:/data/backups/
 ```
 ```bash
-docker compose start router
+docker run --rm -v ai-gateway_router-data:/data alpine sh -c 'cat /data/backups/gateway-20261113.db > /data/gateway.db && rm -f /data/gateway.db-wal /data/gateway.db-shm'
 ```
+```bash
+docker compose start
+```
+The `cat >` keeps the existing file's owner and permissions, so the router can still write to it. The
+`rm` clears any leftover `-wal`/`-shm` files, which would otherwise be applied on top of the restored
+database. Check the volume name with `docker volume ls` if your project directory isn't `ai-gateway`.
 
 Run only **one** router at a time against a database (don't use `--scale router=N`), and keep the
 volume on local disk, not a network share. SQLite's file locking isn't reliable on network filesystems.
