@@ -11,6 +11,9 @@ services:
     env_file: .env
     environment:
       LISTEN_ADDR: ":8080"
+      # Admin API for `docker compose exec router /router providers ...`. Loopback only,
+      # inside this container; never publish or expose it (it has no authentication).
+      ADMIN_ADDR: "127.0.0.1:8081"
       DATABASE_PATH: /data/gateway.db
       PROVIDERS_CONFIG: /config/providers.yaml
     volumes:

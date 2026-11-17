@@ -17,6 +17,12 @@ providers:
       - id: gemini-2.5-flash
         context_length: 1048576
 
+  # Cloudflare Workers AI: the account ID goes in base_url (it isn't a secret); register the
+  # API token with `providers set-key workers-ai` like any other key.
+  # workers-ai:
+  #   base_url: https://api.cloudflare.com/client/v4/accounts/<account_id>/ai/v1
+  #   models: (IDs look like "@cf/<vendor>/<model>"; check the context length in Cloudflare's model docs)
+
   ollama:
     base_url: ${OLLAMA_BASE_URL}/v1
     local: true # only these may serve the `private` route

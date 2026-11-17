@@ -87,7 +87,11 @@ CREATE TABLE provider_keys (
     updated_at TEXT NOT NULL
 ) WITHOUT ROWID;
 ```
-Provider name is the GCM additional authenticated data, so a row can't be moved to another provider.
+Encrypted under `GATEWAY_SECRET_KEY` (32 bytes, base64, from `.env`). The GCM additional authenticated
+data is `"ai-gateway provider key v1\0" + provider`, so a row can't be moved to another provider. The
+router decrypts every row at startup and serves lookups from memory; a row that won't decrypt (wrong
+master key, or altered) is logged by provider name and left disabled until the key is set again. Writes
+go through the admin API (`router providers ...`), so the router stays the only writer.
 
 ## Later (not in Phase 3)
 Chat history for the UI (Phase 4) gets its own tables; `private` chats stay in this database only.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -111,12 +112,105 @@ func TestModelsEndpointRequiresAuthAndListsModels(t *testing.T) {
 }
 
 func TestProviderEnabledFollowsConfig(t *testing.T) {
-	enabled := providerEnabled(testConfig(t))
-	// Remote providers need a key (none can be registered until #40); local ones don't.
+	registered := map[string]bool{}
+	enabled := providerEnabled(testConfig(t), func(name string) bool { return registered[name] })
+	// Remote providers need a key; local ones don't. A key for a provider
+	// that isn't in the config enables nothing.
+	registered["nope"] = true
 	for name, want := range map[string]bool{"ollama": true, "groq": false, "nope": false} {
 		if got := enabled(name); got != want {
 			t.Errorf("providerEnabled(%q) = %v, want %v", name, got, want)
 		}
+	}
+	// Evaluated per call, not captured at startup.
+	registered["groq"] = true
+	if !enabled("groq") {
+		t.Error("providerEnabled(groq) didn't follow a newly registered key")
+	}
+}
+
+// TestModelsFollowKeyChanges registers a key through the admin API and
+// checks GET /v1/models shows the provider on the very next request, then
+// hides it again once the key is removed.
+func TestModelsFollowKeyChanges(t *testing.T) {
+	cfg := testConfig(t)
+	keys := testKeys(t)
+	enabled := providerEnabled(cfg, keys.Has)
+	pub := newHandler(auth.Disabled(), nil, cfg, enabled)
+	adm := newAdminHandler(cfg, keys, enabled)
+
+	hasGroq := func() bool {
+		w := do(pub, "GET", "/v1/models")
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /v1/models = %d", w.Code)
+		}
+		return strings.Contains(w.Body.String(), `"id":"groq/llama"`)
+	}
+	if hasGroq() {
+		t.Fatal("groq listed before a key was registered")
+	}
+
+	adminDo := func(method, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/admin/providers/groq/key", strings.NewReader(body))
+		r.Host = "127.0.0.1:8081"
+		w := httptest.NewRecorder()
+		adm.ServeHTTP(w, r)
+		return w
+	}
+	if w := adminDo("PUT", `{"key":"`+cliTestKey+`"}`); w.Code != http.StatusOK {
+		t.Fatalf("PUT key = %d %s", w.Code, w.Body)
+	}
+	if !hasGroq() {
+		t.Fatal("groq not listed right after its key was registered")
+	}
+	if got, ok := keys.Get("groq"); !ok || got != cliTestKey {
+		t.Fatalf("keys.Get(groq) = %q, %v", got, ok)
+	}
+	if w := adminDo("DELETE", ""); w.Code != http.StatusOK {
+		t.Fatalf("DELETE key = %d %s", w.Code, w.Body)
+	}
+	if hasGroq() {
+		t.Fatal("groq still listed after its key was removed")
+	}
+}
+
+// setServerEnv points run() at temp paths with a valid master key and a
+// loopback admin port picked by the OS.
+func setServerEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("GATEWAY_SECRET_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	t.Setenv("ADMIN_ADDR", "127.0.0.1:0")
+	t.Setenv("DATABASE_PATH", filepath.Join(t.TempDir(), "gateway.db"))
+	good := filepath.Join(t.TempDir(), "providers.yaml")
+	if err := os.WriteFile(good, []byte(testProviders), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PROVIDERS_CONFIG", good)
+}
+
+func TestRunRefusesBadMasterKey(t *testing.T) {
+	for name, value := range map[string]string{
+		"missing":      "",
+		"not base64":   "not-base64!!",
+		"wrong length": base64.StdEncoding.EncodeToString(make([]byte, 16)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			setServerEnv(t)
+			t.Setenv("GATEWAY_SECRET_KEY", value)
+			err := run("127.0.0.1:0")
+			if err == nil || !strings.Contains(err.Error(), "GATEWAY_SECRET_KEY") {
+				t.Errorf("run() = %v, want a GATEWAY_SECRET_KEY error", err)
+			}
+		})
+	}
+}
+
+func TestRunRefusesNonLoopbackAdminAddr(t *testing.T) {
+	setServerEnv(t)
+	t.Setenv("ADMIN_ADDR", ":0")
+	err := run("127.0.0.1:0")
+	if err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Errorf("run() = %v, want a loopback error", err)
 	}
 }
 
@@ -130,8 +224,8 @@ func TestRunStopsOnBadProvidersConfig(t *testing.T) {
 		"invalid file": invalid,
 	} {
 		t.Run(name, func(t *testing.T) {
+			setServerEnv(t)
 			t.Setenv("PROVIDERS_CONFIG", path)
-			t.Setenv("DATABASE_PATH", filepath.Join(t.TempDir(), "gateway.db"))
 			err := run("127.0.0.1:0")
 			if err == nil || !strings.Contains(err.Error(), "providers") {
 				t.Errorf("run() = %v, want a providers config error", err)
