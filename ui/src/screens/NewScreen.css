@@ -1,0 +1,164 @@
+/* The landing screen. Values from design/source/Main.dc.html. */
+
+/* The ⌘K hint in the side list header: a chip, a little tighter. */
+.new-shortcut {
+  padding: 4px 10px;
+}
+
+/* ---------- Robot stage ---------- */
+
+.new-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 14px 14px 0;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 22px;
+  background: var(--stage);
+}
+
+.new-stage-robot {
+  max-width: 420px;
+}
+
+.new-stage-status {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.new-stage-hint {
+  position: absolute;
+  left: 20px;
+  bottom: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- Headline, composer, tier picker ---------- */
+
+.new-message {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 24px 22px;
+}
+
+.new-headline {
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+
+/* ---------- Inspector ---------- */
+
+.new-starters {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 10px;
+}
+
+.new-starters .well-label {
+  margin: 0 10px 6px;
+}
+
+.new-starter {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border-radius: 14px;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+  transition:
+    background 0.3s,
+    transform 0.35s var(--smooth);
+}
+
+.new-starter:hover {
+  background: var(--well2);
+  transform: translateX(3px);
+}
+
+.new-starter:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.new-starter .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.new-providers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.new-providers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.new-providers-up {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green-ink);
+}
+
+/* Red means attention (spec §2), so say so when a provider is down. */
+.new-providers-up.new-some-down {
+  color: var(--red-ink);
+}
+
+.new-provider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.new-provider-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-provider-ms {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.new-requests-today {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The page scrolls at this width, so give the stage a height of its own. */
+@media (max-width: 960px) {
+  .new-stage {
+    min-height: 380px;
+  }
+}
