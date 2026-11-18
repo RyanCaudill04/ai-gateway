@@ -21,6 +21,8 @@
   --red-ink: #d93025;
   --on-blue: #ffffff;
   --code: #0f1520;
+  /* Text in code blocks: light in both themes, since the block stays dark. */
+  --code-ink: #e8edf3;
   --shadow: 0 1px 2px rgba(12, 18, 32, 0.04),
     0 12px 32px -14px rgba(12, 18, 32, 0.14);
   --stage: linear-gradient(180deg, #fbfcfd 0%, #eef1f5 100%);
@@ -53,6 +55,7 @@
     --red: #f28b82;
     --red-ink: #f28b82;
     --on-blue: #0a0e14;
+    --code: #070a0f;
     --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
       0 12px 32px -14px rgba(0, 0, 0, 0.7);
     --stage: linear-gradient(180deg, #151b24 0%, #0c1016 100%);
@@ -75,6 +78,7 @@
   --red: #f28b82;
   --red-ink: #f28b82;
   --on-blue: #0a0e14;
+  --code: #070a0f;
   --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 12px 32px -14px rgba(0, 0, 0, 0.7);
   --stage: linear-gradient(180deg, #151b24 0%, #0c1016 100%);

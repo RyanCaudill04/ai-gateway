@@ -1,0 +1,346 @@
+/* Chat screen. Values from design/source/Chat.dc.html. */
+
+/* ---------- Side list ---------- */
+
+.chat-new {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--well);
+  color: var(--ink);
+  transition:
+    background 0.3s,
+    transform 0.3s var(--spring);
+}
+
+.chat-new:hover {
+  background: var(--well2);
+  transform: scale(1.04);
+}
+
+.chat-new:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.chat-new .icon {
+  stroke-width: 1.9;
+}
+
+/* ---------- Header ---------- */
+
+.chat-header {
+  padding-bottom: 8px;
+}
+
+.chat-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.chat-title h1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The mockup's chip is ink, not the muted default. */
+.chat-title .chip {
+  flex: none;
+  color: var(--ink);
+}
+
+/* ---------- Message stream ---------- */
+
+.chat-stream {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 16px 32px 24px;
+}
+
+.chat-turn,
+.chat-reply {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-turn {
+  gap: 14px;
+}
+
+.chat-reply {
+  gap: 12px;
+}
+
+/* Spec §5: the user's prompt is a right-aligned well bubble. */
+.chat-prompt {
+  align-self: flex-end;
+  max-width: 80%;
+  padding: 14px 18px;
+  border-radius: 22px 22px 6px 22px;
+  background: var(--well);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-text {
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.chat-code {
+  margin: 0;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: var(--code);
+  color: var(--code-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+.chat-code code {
+  font: inherit;
+}
+
+/* ---------- Thinking indicator ---------- */
+
+.chat-thinking {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 999px;
+  background: var(--well);
+}
+
+.chat-thinking-squares {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.chat-thinking-squares > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  animation: think 1s ease-in-out infinite;
+}
+
+/* Staggered so the colours ripple left to right (spec §5). */
+.chat-thinking-squares > span:nth-child(2) { animation-delay: 0.12s; }
+.chat-thinking-squares > span:nth-child(3) { animation-delay: 0.24s; }
+.chat-thinking-squares > span:nth-child(4) { animation-delay: 0.36s; }
+
+@keyframes think {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.chat-thinking-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.chat-thinking-model {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Dock ---------- */
+
+.chat-dock {
+  flex: none;
+  padding: 0 16px 16px;
+}
+
+/* ---------- Inspector ---------- */
+
+.chat-mono-sub {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-status-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.chat-routing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-routing h2 {
+  margin-bottom: 8px;
+}
+
+.chat-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.chat-step-value {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The classifier is the one dark pill: ink fill, card-coloured text. */
+.chat-step-classifier {
+  background: var(--ink);
+  color: var(--card);
+}
+
+.chat-step-classifier .chat-step-value {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.chat-flow {
+  margin-left: 22px;
+}
+
+.chat-tiers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-tier {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  transition:
+    background 0.4s,
+    box-shadow 0.4s,
+    color 0.3s;
+}
+
+/* The chosen tier is ringed in its own colour (spec §8 Chat). */
+.chat-tier.chosen {
+  background: var(--card);
+  color: var(--ink);
+}
+
+.chat-tier-green.chosen { box-shadow: 0 0 0 1.5px var(--green); }
+.chat-tier-blue.chosen { box-shadow: 0 0 0 1.5px var(--blue); }
+.chat-tier-red.chosen { box-shadow: 0 0 0 1.5px var(--red); }
+
+.chat-scores {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-score {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-score-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.chat-score-row > span:first-child {
+  font-weight: 500;
+}
+
+.chat-served dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+  margin: 0;
+}
+
+.chat-served div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chat-served dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-served dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.chat-served dd.chat-served-key {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Phones: the page scrolls, so give the stream a sensible height of its own. */
+@media (max-width: 960px) {
+  .chat-stream {
+    flex: none;
+    max-height: 70vh;
+  }
+}
