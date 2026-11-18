@@ -1,0 +1,310 @@
+/* Keys & usage. Values from design/source/Keys.dc.html. */
+
+/* ---------- Side list ---------- */
+
+.keys-row-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Pinned to the bottom of the side card, however few keys there are. */
+.keys-create {
+  flex: none;
+  width: 100%;
+  margin-top: auto;
+}
+
+.keys-create .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- Main card ---------- */
+
+/* Everything under the header scrolls; the header stays put. */
+.keys-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+}
+
+/* The key row: one long pill. */
+.keys-key {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 18px;
+  border-radius: 999px;
+}
+
+.keys-key-text {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.keys-key-scope {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.keys-key-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* White pills on the well, rather than the usual well-on-card. */
+.pill-button.keys-key-button {
+  min-height: 40px;
+  background: var(--card);
+}
+
+.pill-button.keys-key-button:hover {
+  background: var(--well2);
+}
+
+.pill-button.keys-show {
+  min-width: 64px;
+}
+
+.pill-button.keys-copy {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.keys-copy .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- Requests chart ---------- */
+
+.keys-requests {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 22px;
+}
+
+.keys-requests-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.keys-requests-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.keys-requests-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.keys-requests-number {
+  font-size: 32px;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+
+.keys-range .segmented {
+  background: var(--well2);
+}
+
+.keys-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Recent requests ---------- */
+
+.keys-recent {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 14px;
+}
+
+.keys-recent-title {
+  margin: 0 8px 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.keys-table-scroll {
+  overflow-x: auto;
+}
+
+/* Separate borders with vertical spacing, so each row reads as its own pill. */
+.keys-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  font-size: 14px;
+}
+
+.keys-table th {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  text-align: left;
+}
+
+.keys-table td {
+  padding: 10px 12px;
+  background: var(--card);
+}
+
+.keys-table td:first-child {
+  border-radius: 14px 0 0 14px;
+}
+
+.keys-table td:last-child {
+  border-radius: 0 14px 14px 0;
+}
+
+.keys-table .keys-num {
+  text-align: right;
+}
+
+.keys-table-row {
+  animation: keys-row-in 0.6s var(--smooth) both;
+}
+
+@keyframes keys-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.keys-time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.keys-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keys-model,
+.keys-latency {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.keys-status {
+  font-weight: 500;
+}
+
+/* Text, so the darker ink shades (spec §2). */
+.keys-ok {
+  color: var(--green-ink);
+}
+
+.keys-fail {
+  color: var(--red-ink);
+}
+
+/* ---------- Inspector ---------- */
+
+.keys-headroom {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.keys-headroom-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.keys-headroom-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.keys-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.keys-provider-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.keys-provider-name {
+  font-weight: 500;
+}
+
+.keys-provider-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.keys-provider-count.keys-fail {
+  color: var(--red-ink);
+}
+
+.keys-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+  margin: 0;
+}
+
+.keys-facts div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.keys-facts dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.keys-facts dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.keys-facts dd.keys-fail {
+  color: var(--red-ink);
+}

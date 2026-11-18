@@ -7,6 +7,8 @@ const PATHS = {
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
   slash: 'M16 4L8 20',
   check: 'M5 12l5 5 9-10',
+  // Two overlapping sheets (design/source/Keys.dc.html).
+  copy: 'M11.5 9h6a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-6A2.5 2.5 0 0 1 9 17.5v-6A2.5 2.5 0 0 1 11.5 9zM5 15V6a2 2 0 0 1 2-2h8',
   // Two stacked boxes with a light on each: a rack of servers.
   server: 'M5 5h14v6H5zM5 13h14v6H5zM8.5 8h.01M8.5 16h.01',
   cube: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5',
