@@ -1,0 +1,90 @@
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 6px;
+  background: var(--well);
+  transition:
+    box-shadow 0.35s,
+    background 0.3s;
+}
+
+.composer-hero {
+  border-radius: 24px;
+}
+
+.composer-dock {
+  border-radius: 26px;
+}
+
+/* Spec §5: a 2px blue ring plus a 6px ring of blue at 16%. */
+.composer:focus-within {
+  box-shadow:
+    0 0 0 2px var(--blue),
+    0 0 0 6px color-mix(in srgb, var(--blue) 16%, transparent);
+}
+
+.composer-hero:focus-within {
+  background: var(--card);
+}
+
+.composer-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.composer-hero .composer-input {
+  padding: 12px 14px;
+}
+
+.composer-dock .composer-input {
+  padding: 13px 16px;
+}
+
+.composer-input::placeholder {
+  color: var(--muted);
+}
+
+/* An icon on blue only needs 3:1, so the arrow is fine (spec §2). */
+.send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--on-blue);
+  cursor: pointer;
+  transition:
+    transform 0.4s cubic-bezier(0.2, 1.5, 0.4, 1),
+    box-shadow 0.3s;
+}
+
+.send .icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.2;
+}
+
+.send:hover {
+  transform: scale(1.08);
+  box-shadow: 0 8px 20px -6px var(--blue);
+}
+
+.send:active {
+  transform: scale(0.92);
+}
+
+.send:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
