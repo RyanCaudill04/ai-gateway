@@ -1,0 +1,169 @@
+/* The landing robot's motion (spec §7). Values and keyframes from
+   design/source/Main.dc.html; class and keyframe names carry a robot- prefix
+   so they can't collide with anything else on the page. The global
+   reduced-motion rule in tokens.css turns all of it off. */
+
+.robot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* A faint edge between faces so the white shell doesn't melt into a light
+   stage. */
+.robot polygon {
+  stroke: rgba(12, 18, 32, 0.07);
+  stroke-width: 0.4;
+  stroke-linejoin: round;
+}
+
+.robot-glow {
+  filter: drop-shadow(0 0 2.5px rgba(66, 133, 244, 0.95));
+}
+
+/* ---------- Intro: parts drop in (delays are set per part) ---------- */
+
+.robot-drop {
+  animation: robot-drop 0.8s cubic-bezier(0.2, 1.35, 0.4, 1) both;
+}
+
+@keyframes robot-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-56px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.robot-shadow-in {
+  animation: robot-fadein 0.8s ease 0.2s both;
+}
+
+@keyframes robot-fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ---------- Idle: float, with the shadow shrinking in sync ---------- */
+
+.robot-float {
+  animation: robot-float 5s ease-in-out 2.2s infinite;
+}
+
+@keyframes robot-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+.robot-shadow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: robot-shadow 5s ease-in-out 2.2s infinite;
+}
+
+@keyframes robot-shadow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.86);
+    opacity: 0.7;
+  }
+}
+
+/* Head lift and eye follow ease between positions instead of jumping. */
+.robot-follow {
+  transition: transform 0.3s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+.robot-wave {
+  transform-box: view-box;
+  animation: robot-wave 7s ease-in-out 2.8s infinite;
+}
+
+@keyframes robot-wave {
+  0%, 68%, 100% { transform: rotate(0); }
+  74% { transform: rotate(-32deg); }
+  80% { transform: rotate(-12deg); }
+  86% { transform: rotate(-30deg); }
+  92% { transform: rotate(0); }
+}
+
+.robot-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: robot-blink 5s infinite;
+}
+
+@keyframes robot-blink {
+  0%, 93%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+
+/* The four thinking pixels (staggered per pixel). */
+.robot-think {
+  animation: robot-think 0.9s ease-in-out infinite;
+}
+
+@keyframes robot-think {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+/* ---------- Lights and fan: faster while typing, fastest thinking ---------- */
+
+.robot-led {
+  animation: robot-led 1.6s steps(2) infinite;
+}
+
+.robot-led2 {
+  animation: robot-led 2.3s steps(2) 0.4s infinite;
+}
+
+@keyframes robot-led {
+  50% { opacity: 0.25; }
+}
+
+.robot-thinking .robot-led,
+.robot-thinking .robot-led2 {
+  animation-duration: 0.28s;
+}
+
+.robot-ant {
+  animation: robot-ant 2s ease-in-out infinite;
+}
+
+@keyframes robot-ant {
+  50% { opacity: 0.45; }
+}
+
+.robot-typing .robot-ant {
+  animation-duration: 0.5s;
+}
+
+.robot-thinking .robot-ant {
+  animation-duration: 0.22s;
+}
+
+.robot-fan {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: robot-fan 3s linear infinite;
+}
+
+.robot-typing .robot-fan {
+  animation-duration: 1.1s;
+}
+
+.robot-thinking .robot-fan {
+  animation-duration: 0.3s;
+}
+
+@keyframes robot-fan {
+  to { transform: rotate(360deg); }
+}
