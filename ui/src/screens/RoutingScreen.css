@@ -1,0 +1,381 @@
+/* Routing screen. Values from design/source/Routing.dc.html. */
+
+/* ---------- Side list ---------- */
+
+.routing-live {
+  padding: 4px 10px;
+  color: var(--green-ink);
+}
+
+.routing-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+/* ---------- Stage ---------- */
+
+.routing-stage {
+  flex: 1;
+  min-height: 0;
+  margin: 14px 14px 0;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  border-radius: 22px;
+  background: var(--stage);
+  /* Short windows scroll the stage instead of clipping the lanes. */
+  overflow-y: auto;
+  /* Lanes lay out by the stage's own width, which depends on the side list
+     and inspector as much as on the window. */
+  container-type: inline-size;
+}
+
+/* Centred vertically with auto margins rather than justify-content, which
+   would push the top out of reach once the stage has to scroll. */
+.routing-stage > :first-child {
+  margin-top: auto;
+}
+
+.routing-stage > :last-child {
+  margin-bottom: auto;
+}
+
+.routing-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.routing-to-classifier {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.routing-prompt {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.routing-prompt-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.routing-prompt-text {
+  font-size: 16px;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+/* The dashed line from prompt to classifier, with a blue packet riding it. */
+.routing-packet-track {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  width: 72px;
+  height: 10px;
+}
+
+.routing-packet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--blue);
+  animation: routing-travel 1.4s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+@keyframes routing-travel {
+  0% { left: 0; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { left: calc(100% - 10px); opacity: 0; }
+}
+
+/* Ink pill, so it flips with the theme: dark on light, light on dark. */
+.routing-classifier {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px 14px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--card);
+}
+
+/* The Google mark colours stay fixed in both themes, like the robot's. */
+.routing-mark {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: conic-gradient(#4285f4 0 33%, #ea4335 0 66%, #34a853 0);
+  animation: routing-spin 6s linear infinite;
+}
+
+@keyframes routing-spin {
+  to { transform: rotate(360deg); }
+}
+
+.routing-classifier-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.routing-classifier-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.routing-classifier-ms {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* ---------- Tier lanes ---------- */
+
+.routing-lanes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lane-green { --lane: var(--green); }
+.lane-blue { --lane: var(--blue); }
+.lane-red { --lane: var(--red); }
+
+.routing-lane {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  opacity: 0.5;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s var(--smooth);
+}
+
+.routing-lane.chosen {
+  opacity: 1;
+  transform: translateX(8px);
+}
+
+.routing-tier {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 190px;
+  padding: 14px 18px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  transition:
+    background 0.4s,
+    box-shadow 0.4s;
+}
+
+/* The one tier that gets colour beyond its dot: a ring and a glow (spec §2). */
+.routing-lane.chosen .routing-tier {
+  box-shadow:
+    0 0 0 2px var(--lane),
+    0 12px 28px -12px var(--lane);
+}
+
+.routing-tier-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.routing-tier-score {
+  font-size: 12px;
+}
+
+.routing-lane-detail {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.routing-chain {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Result wells ---------- */
+
+.routing-stats {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+
+.routing-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.routing-stat-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.routing-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Inspector ---------- */
+
+.routing-well {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.routing-signals {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.routing-signal {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 12px;
+}
+
+.routing-today {
+  gap: 12px;
+}
+
+.routing-split {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+}
+
+.routing-split > span {
+  border-radius: 999px;
+}
+
+.routing-split-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.routing-split-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.routing-split-list .mono {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.routing-fallbacks {
+  gap: 6px;
+}
+
+.routing-fallbacks p {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- Motion ---------- */
+
+/* Selection swaps: new values rise in (spec §6). Shorter and closer than
+   the shared .rise, so clicking down the list feels quick. */
+.routing-swap {
+  animation: routing-swap 0.5s var(--smooth);
+}
+
+@keyframes routing-swap {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 960px) {
+  .routing-stage {
+    flex: none;
+    padding: 20px;
+    gap: 24px;
+  }
+
+  .routing-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A lane needs about 500px for line + pill + bar on one row. Below that,
+   each lane stacks: the pill, then its bar and chain under it, instead of
+   the bar wrapping onto a ragged second line. */
+@container (max-width: 500px) {
+  .routing-lanes {
+    gap: 16px;
+  }
+
+  .routing-lane {
+    gap: 10px;
+  }
+
+  .routing-lane .flow {
+    display: none;
+  }
+
+  .routing-tier {
+    flex: 1 1 100%;
+    width: auto;
+  }
+
+  .routing-lane-detail {
+    flex-basis: 100%;
+    padding: 0 18px;
+  }
+}
