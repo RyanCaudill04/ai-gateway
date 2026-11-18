@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wireframe A — Full app shell</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.b{border:1.5px solid #A3A8B2;border-radius:12px;box-sizing:border-box;position:relative}
+.d{border:1.5px dashed #C3C7CE;border-radius:12px;box-sizing:border-box;position:relative}
+.l{position:absolute;top:8px;left:12px;font:500 12px ui-monospace,Menlo,monospace;color:#6A707C}
+.ln{height:10px;border-radius:5px;background:#E3E5E9}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; background: #FAFAFA; display: flex; gap: 0; font-family: system-ui, sans-serif">
+  <div class="b" style="width: 72px; height: 100%; border-radius: 0; border-width: 0 1.5px 0 0; display: flex; flex-direction: column; align-items: center; gap: 16px; padding-top: 20px">
+    <div class="b" style="width: 36px; height: 36px; border-radius: 10px"></div>
+    <div class="d" style="width: 36px; height: 36px; border-radius: 10px; margin-top: 16px"></div>
+    <div class="d" style="width: 36px; height: 36px; border-radius: 10px"></div>
+    <div class="d" style="width: 36px; height: 36px; border-radius: 10px"></div>
+    <div class="d" style="width: 36px; height: 36px; border-radius: 10px"></div>
+  </div>
+  <div class="b" style="width: 264px; height: 100%; border-radius: 0; border-width: 0 1.5px 0 0; padding: 48px 16px 16px; display: flex; flex-direction: column; gap: 8px">
+    <span class="l" style="top: 18px; left: 16px">chat list</span>
+    <div class="b" style="height: 40px"></div>
+    <div class="d" style="height: 56px"></div>
+    <div class="d" style="height: 56px"></div>
+    <div class="d" style="height: 56px"></div>
+    <div class="d" style="height: 56px"></div>
+    <div class="d" style="height: 56px"></div>
+  </div>
+  <div style="flex: 1; display: flex; flex-direction: column; min-width: 0">
+    <div class="b" style="height: 56px; border-radius: 0; border-width: 0 0 1.5px 0"><span class="l" style="top: 20px; left: 24px">title · model tier · actions</span></div>
+    <div style="flex: 1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 24px; padding: 24px; min-height: 0">
+      <div style="grid-column: span 8; display: flex; flex-direction: column; gap: 20px; min-height: 0">
+        <div class="d" style="flex: 1; padding: 40px 24px 24px; display: flex; flex-direction: column; gap: 14px">
+          <span class="l">message stream</span>
+          <div class="ln" style="width: 70%; height: 16px"></div>
+          <div class="b" style="height: 32px; width: 60%; border-radius: 16px"><span class="l" style="top: 7px">route trace</span></div>
+          <div class="ln" style="width: 95%"></div><div class="ln" style="width: 88%"></div><div class="ln" style="width: 60%"></div>
+          <div class="b" style="height: 140px"><span class="l">code</span></div>
+          <div class="ln" style="width: 70%; height: 16px; margin-top: 12px"></div>
+          <div class="ln" style="width: 90%"></div><div class="ln" style="width: 50%"></div>
+        </div>
+        <div class="b" style="height: 96px; border-radius: 16px"><span class="l">composer</span></div>
+      </div>
+      <div class="b" style="grid-column: span 4; padding: 40px 16px 16px; display: flex; flex-direction: column; gap: 12px">
+        <span class="l">inspector — routing for selected turn</span>
+        <div class="d" style="height: 180px"><span class="l">path diagram</span></div>
+        <div class="d" style="height: 120px"><span class="l">tier scores</span></div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+          <div class="d" style="height: 72px"></div><div class="d" style="height: 72px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Current — New conversation</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+.light{--ground:#ECEFF3;--card:#FFFFFF;--well:#F4F6F9;--well2:#E8ECF1;--line:#E3E7ED;--ink:#0C1220;--muted:#566174;--blue:#4285F4;--blue-ink:#1A73E8;--green:#34A853;--green-ink:#188038;--red:#EA4335;--red-ink:#D93025;--on-blue:#FFFFFF;--shadow:0 1px 2px rgba(12,18,32,.04),0 12px 32px -14px rgba(12,18,32,.14);--stage:linear-gradient(180deg,#FBFCFD 0%,#EEF1F5 100%)}
+.dark{--ground:#05070A;--card:#10151C;--well:#171D26;--well2:#1F2631;--line:#232B37;--ink:#EEF2F7;--muted:#8B97A8;--blue:#8AB4F8;--blue-ink:#8AB4F8;--green:#81C995;--green-ink:#81C995;--red:#F28B82;--red-ink:#F28B82;--on-blue:#0A0E14;--shadow:inset 0 1px 0 rgba(255,255,255,.04),0 12px 32px -14px rgba(0,0,0,.7);--stage:linear-gradient(180deg,#151B24 0%,#0C1016 100%)}
+.card{background:var(--card);border-radius:28px;box-shadow:var(--shadow);box-sizing:border-box;min-width:0;min-height:0}
+.well{background:var(--well);border-radius:20px;padding:16px;box-sizing:border-box}
+.nav{transition:background .3s,color .3s,transform .35s cubic-bezier(.2,1.4,.4,1)}
+.nav:hover{background:var(--well2);color:var(--ink);transform:scale(1.06)}
+.row{transition:background .3s,transform .35s cubic-bezier(.2,.8,.2,1)}
+.row:hover{background:var(--well2);transform:translateX(3px)}
+.seg{transition:background .35s,color .25s,box-shadow .35s}
+.send{transition:transform .4s cubic-bezier(.2,1.5,.4,1),box-shadow .3s}
+.send:hover{transform:scale(1.08);box-shadow:0 8px 20px -6px var(--blue)}
+.send:active{transform:scale(.92)}
+.field{transition:box-shadow .35s,background .3s}
+.field:focus{background:var(--card);box-shadow:0 0 0 2px var(--blue),0 0 0 6px color-mix(in srgb,var(--blue) 16%,transparent)}
+textarea::placeholder{color:var(--muted)}
+.robot polygon{stroke:rgba(12,18,32,.07);stroke-width:.4;stroke-linejoin:round}
+.glowe{filter:drop-shadow(0 0 2.5px rgba(66,133,244,.95))}
+.drop{animation:drop .8s cubic-bezier(.2,1.35,.4,1) both}
+@keyframes drop{from{opacity:0;transform:translateY(-56px)}to{opacity:1;transform:none}}
+.float{animation:float 5s ease-in-out 2.2s infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.shadow{transform-box:fill-box;transform-origin:center;animation:shadow 5s ease-in-out 2.2s infinite}
+@keyframes shadow{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.86);opacity:.7}}
+.shadowin{animation:fadein .8s ease .2s both}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.follow{transition:transform .3s cubic-bezier(.2,1.2,.4,1)}
+.wave{transform-box:view-box;animation:wave 7s ease-in-out 2.8s infinite}
+@keyframes wave{0%,68%,100%{transform:rotate(0)}74%{transform:rotate(-32deg)}80%{transform:rotate(-12deg)}86%{transform:rotate(-30deg)}92%{transform:rotate(0)}}
+.blink{transform-box:fill-box;transform-origin:center;animation:blink 5s infinite}
+@keyframes blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+.think{animation:think .9s ease-in-out infinite}
+@keyframes think{0%,100%{opacity:.2}50%{opacity:1}}
+.led{animation:led 1.6s steps(2) infinite}
+.led2{animation:led 2.3s steps(2) .4s infinite}
+@keyframes led{50%{opacity:.25}}
+.thinking .led,.thinking .led2{animation-duration:.28s}
+.ant{animation:ant 2s ease-in-out infinite}
+@keyframes ant{50%{opacity:.45}}
+.typing .ant{animation-duration:.5s}
+.thinking .ant{animation-duration:.22s}
+.fan{transform-box:fill-box;transform-origin:center;animation:spin 3s linear infinite}
+.typing .fan{animation-duration:1.1s}
+.thinking .fan{animation-duration:.3s}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pulse{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@media (max-width:960px){.root{flex-direction:column!important;height:auto!important}.shell{flex-direction:column!important}.side{display:none!important}.body{grid-template-columns:minmax(0,1fr)!important}.body>*{grid-column:auto!important}.stage{min-height:380px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="root {{theme}}" style="height: 100vh; min-height: 760px; box-sizing: border-box; padding: 12px; display: flex; flex-direction: column; gap: 12px; background: var(--ground); color: var(--ink); font-family: Geist, Inter, system-ui, sans-serif">
+
+  <nav class="card" aria-label="Primary" style="flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 10px 10px 18px; border-radius: 24px">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">
+      <svg width="30" height="30" viewBox="0 0 26 26" aria-hidden="true"><rect x="2" y="4" width="22" height="18" rx="6" style="fill: var(--well2)"></rect><rect x="5.5" y="7.5" width="15" height="11" rx="3.5" fill="#0E1218"></rect><rect x="8.5" y="11" width="3" height="4" rx="1.2" fill="#4285F4"></rect><rect x="14.5" y="11" width="3" height="4" rx="1.2" fill="#4285F4"></rect></svg>
+      current
+    </a>
+    <div style="display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 999px; background: var(--well)">
+      <a class="nav" href="Main.dc.html" aria-current="page" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; background: var(--card); color: var(--ink); box-shadow: var(--shadow)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"></rect><path d="M12 8v8M8 12h8"></path></svg>New</a>
+      <a class="nav" href="Chat.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path></svg>Chats</a>
+      <a class="nav" href="Routing.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2"></circle><path d="M6 7v4a5 5 0 0 0 5 5h7"></path><path d="M15 13l3 3-3 3"></path><path d="M6 11v8"></path></svg>Routing</a>
+      <a class="nav" href="Keys.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M16 7l3 3"></path></svg>Keys &amp; usage</a>
+    </div>
+    <button type="button" class="nav" onClick="{{toggleTheme}}" aria-label="{{themeLabel}}" style="width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--well); color: var(--ink); display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg></button>
+  </nav>
+  <div class="shell" style="flex: 1; min-height: 0; display: flex; gap: 12px">
+
+  <aside class="card side" aria-label="Conversations" style="width: 280px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 12px">
+      <h2 style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">Chats</h2>
+      <span style="padding: 4px 10px; border-radius: 999px; background: var(--well); font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">⌘K</span>
+    </div>
+    <p style="margin: 4px 12px 6px; font-size: 12px; font-weight: 500; color: var(--muted)">Today</p>
+    <sc-for list="{{recent}}" as="r" hint-placeholder-count="5">
+      <a class="row" href="Chat.dc.html" style="display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 16px; text-decoration: none">
+        <span style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.title}}</span>
+        <span style="display: flex; align-items: center; gap: 6px; font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: {{r.dot}}; display: inline-block"></span>{{r.meta}}</span>
+      </a>
+    </sc-for>
+  </aside>
+
+  <div class="body" style="flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px">
+    <main class="card" style="grid-column: span 8; display: flex; flex-direction: column; overflow: hidden">
+      <header style="flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 24px 0">
+        <h1 style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">New conversation</h1>
+        <span style="padding: 6px 12px; border-radius: 999px; background: var(--well); font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">ai.ryancaudill.dev/v1</span>
+      </header>
+
+      <section class="stage" aria-label="Robot" onMouseMove="{{onLook}}" onMouseLeave="{{onLeave}}" style="flex: 1; min-height: 0; margin: 14px 14px 0; border-radius: 22px; background: var(--stage); position: relative; display: flex; align-items: center; justify-content: center; padding: 20px; overflow: hidden">
+        <div style="position: absolute; top: 16px; left: 16px; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--card); box-shadow: var(--shadow); font-size: 13px; font-weight: 500">
+          <span class="{{statusDotCls}}" aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: {{statusDot}}; display: inline-block"></span>
+          {{statusText}}
+        </div>
+        <svg class="robot {{mode}}" viewBox="-85 -150 200 290" role="img" aria-label="Current's robot" style="width: 100%; height: 100%; max-width: 420px; overflow: visible">
+          <defs>
+            <linearGradient id="sTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"></stop><stop offset="1" stop-color="#EDF1F5"></stop></linearGradient>
+            <linearGradient id="sFront" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F8FAFC"></stop><stop offset="1" stop-color="#D6DDE6"></stop></linearGradient>
+            <linearGradient id="sSide" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#D3DAE3"></stop><stop offset="1" stop-color="#A9B3C1"></stop></linearGradient>
+            <linearGradient id="dTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4B525D"></stop><stop offset="1" stop-color="#343A43"></stop></linearGradient>
+            <linearGradient id="dFront" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30363F"></stop><stop offset="1" stop-color="#1A1E24"></stop></linearGradient>
+            <linearGradient id="dSide" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#23282F"></stop><stop offset="1" stop-color="#101317"></stop></linearGradient>
+            <linearGradient id="visor" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#202938"></stop><stop offset="1" stop-color="#05070A"></stop></linearGradient>
+            <linearGradient id="pcb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#24935F"></stop><stop offset="1" stop-color="#13563A"></stop></linearGradient>
+            <radialGradient id="shadowG" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#0C1220" stop-opacity="0.28"></stop><stop offset="1" stop-color="#0C1220" stop-opacity="0"></stop></radialGradient>
+          </defs>
+          <g class="shadowin"><ellipse class="shadow" cx="16" cy="96" rx="78" ry="26" fill="url(#shadowG)"></ellipse></g>
+          <g class="float">
+            <sc-for list="{{partsA}}" as="pt" hint-placeholder-count="8">
+              <g class="{{pt.outer}}" style="{{pt.outerStyle}}"><g class="{{pt.inner}}" style="{{pt.innerStyle}}">
+                <sc-for list="{{pt.polys}}" as="p" hint-placeholder-count="3">
+                  <polygon points="{{p.pts}}" fill="{{p.fill}}" class="{{p.cls}}" style="{{p.style}}"></polygon>
+                </sc-for>
+              </g></g>
+            </sc-for>
+            <g class="drop" style="animation-delay: 1.5s"><g class="follow" style="{{headStyle}}">
+              <g transform="matrix(11.26 6.5 -11.26 6.5 19.1 -98.1)">
+                <circle r="2" fill="#15191F"></circle>
+                <circle r="1.7" fill="#2A3038"></circle>
+                <g class="fan">
+                  <path d="M0 0 C0.6 -0.7 1.4 -0.6 1.6 -0.2 L0.2 0.2 Z" fill="#B7C0CC"></path>
+                  <path d="M0 0 C0.6 -0.7 1.4 -0.6 1.6 -0.2 L0.2 0.2 Z" fill="#B7C0CC" transform="rotate(72)"></path>
+                  <path d="M0 0 C0.6 -0.7 1.4 -0.6 1.6 -0.2 L0.2 0.2 Z" fill="#B7C0CC" transform="rotate(144)"></path>
+                  <path d="M0 0 C0.6 -0.7 1.4 -0.6 1.6 -0.2 L0.2 0.2 Z" fill="#B7C0CC" transform="rotate(216)"></path>
+                  <path d="M0 0 C0.6 -0.7 1.4 -0.6 1.6 -0.2 L0.2 0.2 Z" fill="#B7C0CC" transform="rotate(288)"></path>
+                </g>
+                <circle r="0.4" fill="#4285F4"></circle>
+              </g>
+            </g></g>
+            <sc-for list="{{partsB}}" as="pt" hint-placeholder-count="2">
+              <g class="{{pt.outer}}" style="{{pt.outerStyle}}"><g class="{{pt.inner}}" style="{{pt.innerStyle}}">
+                <sc-for list="{{pt.polys}}" as="p" hint-placeholder-count="3">
+                  <polygon points="{{p.pts}}" fill="{{p.fill}}" class="{{p.cls}}" style="{{p.style}}"></polygon>
+                </sc-for>
+              </g></g>
+            </sc-for>
+          </g>
+        </svg>
+        <p style="position: absolute; left: 20px; bottom: 16px; margin: 0; font-size: 13px; color: var(--muted)">Move your cursor. Start typing. Hit send.</p>
+      </section>
+
+      <section aria-label="New message" style="flex: none; padding: 20px 24px 22px; display: flex; flex-direction: column; gap: 14px">
+        <h2 style="margin: 0; font-size: 26px; line-height: 1.1; font-weight: 600; letter-spacing: -0.035em">What are we working on?</h2>
+        <label for="prompt" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Message</label>
+        <div style="display: flex; gap: 10px; align-items: flex-end; padding: 6px; border-radius: 24px; background: var(--well)">
+          <textarea id="prompt" class="field" rows="2" onInput="{{onType}}" placeholder="Describe a task, paste code, or ask a question…" style="flex: 1; min-width: 0; resize: none; border: 0; border-radius: 18px; background: transparent; color: var(--ink); padding: 12px 14px; font-family: inherit; font-size: 16px; line-height: 1.5; outline: none; box-sizing: border-box"></textarea>
+          <button type="button" class="send" aria-label="Send" onClick="{{onSend}}" style="flex: none; width: 48px; height: 48px; border: 0; border-radius: 50%; background: var(--blue); color: var(--on-blue); display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg>
+          </button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px">
+          <div role="radiogroup" aria-label="Model tier" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 999px; background: var(--well)">
+            <sc-for list="{{tiers}}" as="t" hint-placeholder-count="4">
+              <button type="button" class="seg" role="radio" aria-checked="{{t.checked}}" onClick="{{t.pick}}" style="{{t.style}}"><span aria-hidden="true" style="{{t.dotStyle}}"></span>{{t.label}}</button>
+            </sc-for>
+          </div>
+          <span style="font-size: 13px; color: var(--muted)">{{tierHint}}</span>
+        </div>
+      </section>
+    </main>
+
+    <aside class="card" aria-label="Overview" style="grid-column: span 4; padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto">
+      <section class="well" style="display: flex; flex-direction: column; gap: 4px; padding: 14px 10px">
+        <h2 style="margin: 0 10px 6px; font-size: 13px; font-weight: 500; color: var(--muted)">Start with</h2>
+        <sc-for list="{{starters}}" as="s" hint-placeholder-count="4">
+          <a class="row" href="Chat.dc.html" style="min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; border-radius: 14px; text-decoration: none; font-size: 15px; font-weight: 500">{{s}}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg></a>
+        </sc-for>
+      </section>
+      <section class="well" style="display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <h2 style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted)">Providers</h2>
+          <span style="font-size: 13px; font-weight: 600; color: var(--green-ink)">4 of 4 up</span>
+        </div>
+        <sc-for list="{{providers}}" as="p" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 14px">
+            <span style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: inline-block"></span>{{p.name}}</span>
+            <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">{{p.ms}}</span>
+          </div>
+        </sc-for>
+      </section>
+      <section class="well" style="display: flex; flex-direction: column; gap: 4px">
+        <h2 style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted)">Requests today</h2>
+        <span style="font-size: 30px; font-weight: 600; letter-spacing: -0.03em">[COUNT]</span>
+      </section>
+    </aside>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { theme: null, tier: 'auto', lx: 0, ly: 0, typing: false, thinking: false };
+  }
+  componentWillUnmount() { clearTimeout(this._t); clearTimeout(this._k); }
+  robot(mode, lx, ly) {
+    const s = 13;
+    const P = (x, y, z) => ((x - y) * 0.866 * s).toFixed(1) + ',' + ((x + y) * 0.5 * s - z * s).toFixed(1);
+    const poly = (a, fill, cls, style) => ({ pts: a.join(' '), fill: fill, cls: cls || '', style: style || '' });
+    const cube = (x, y, z, w, d, h, c, cls) => [
+      poly([P(x, y, z + h), P(x + w, y, z + h), P(x + w, y + d, z + h), P(x, y + d, z + h)], c[0], cls),
+      poly([P(x, y + d, z), P(x + w, y + d, z), P(x + w, y + d, z + h), P(x, y + d, z + h)], c[1], cls),
+      poly([P(x + w, y, z), P(x + w, y + d, z), P(x + w, y + d, z + h), P(x + w, y, z + h)], c[2], cls)
+    ];
+    const front = (x1, x2, z1, z2, y, fill, cls, style) => poly([P(x1, y, z1), P(x2, y, z1), P(x2, y, z2), P(x1, y, z2)], fill, cls, style);
+    const side = (y1, y2, z1, z2, x, fill, cls, style) => poly([P(x, y1, z1), P(x, y2, z1), P(x, y2, z2), P(x, y1, z2)], fill, cls, style);
+    const SHELL = ['url(#sTop)', 'url(#sFront)', 'url(#sSide)'];
+    const DARK = ['url(#dTop)', 'url(#dFront)', 'url(#dSide)'];
+    const GOLD = ['#F2C766', '#D9A441', '#B08030'];
+    const ANT = ['#F28B82', '#EA4335', '#B3261E'];
+    const BLU = ['#8AB4F8', '#4285F4', '#1A5BC4'];
+    const lift = mode === 'typing' ? -6 : mode === 'thinking' ? -2 : 0;
+    const headStyle = 'transform: translateY(' + lift + 'px)';
+    const part = (polys, o) => Object.assign({ outer: 'drop', outerStyle: '', inner: 'follow', innerStyle: '', polys: polys }, o || {});
+    const arm = (x) => [].concat(
+      cube(x, 4.9, 7.0, 1.4, 1.2, 1.0, DARK),
+      cube(x, 4.6, 5.5, 1.4, 1.8, 1.6, SHELL),
+      cube(x + 0.1, 4.7, 4.85, 1.2, 1.6, 0.65, DARK),
+      cube(x, 4.6, 3.3, 1.4, 1.8, 1.55, SHELL),
+      cube(x + 0.15, 4.75, 2.65, 1.1, 1.5, 0.65, DARK)
+    );
+    const legs = [].concat(
+      cube(4.45, 4.9, 0.9, 1.6, 2, 1.2, DARK), cube(3.9, 4.3, 0, 2.7, 3.4, 0.9, SHELL),
+      cube(7.95, 4.9, 0.9, 1.6, 2, 1.2, DARK), cube(7.4, 4.3, 0, 2.7, 3.4, 0.9, SHELL)
+    );
+    let body = cube(3.5, 3.5, 2.1, 7, 4, 6, SHELL);
+    body.push(front(3.5, 10.5, 7.32, 7.42, 7.5, 'rgba(12,18,32,.10)'));
+    body.push(front(4.4, 9.6, 3.0, 6.8, 7.5, 'url(#pcb)'));
+    body.push(front(5.0, 6.9, 3.6, 5.5, 7.5, '#14171B'));
+    body.push(front(5.25, 6.65, 3.85, 5.25, 7.5, '#262B32'));
+    for (let i = 0; i < 7; i++) body.push(front(4.9 + i * 0.62, 5.25 + i * 0.62, 6.15, 6.5, 7.5, '#E0AE4A'));
+    body.push(front(7.4, 7.9, 3.4, 3.7, 7.5, '#D7DCE3'));
+    body.push(front(7.4, 7.9, 4.0, 4.3, 7.5, '#D7DCE3'));
+    body.push(front(8.2, 8.9, 5.0, 5.6, 7.5, '#EA4335', 'led'));
+    body.push(front(8.2, 8.9, 4.0, 4.6, 7.5, '#34A853', 'led2'));
+    body.push(front(8.2, 9.2, 3.2, 3.5, 7.5, '#0F1215'));
+    [[4.55, 3.15], [9.3, 3.15], [4.55, 6.5], [9.3, 6.5]].forEach((c) => body.push(front(c[0], c[0] + 0.18, c[1], c[1] + 0.18, 7.5, '#B4BDC9')));
+    for (let i = 0; i < 4; i++) body.push(side(4.4, 6.6, 4.0 + i * 0.5, 4.2 + i * 0.5, 10.5, 'rgba(12,18,32,.28)'));
+    let head = cube(3, 3, 8.7, 8, 4.6, 5, SHELL);
+    head.push(front(3.7, 10.3, 9.4, 13.0, 7.6, 'url(#visor)'));
+    head.push(poly([P(4.2, 7.6, 12.8), P(5.6, 7.6, 12.8), P(4.6, 7.6, 9.6), P(3.9, 7.6, 9.6)], 'rgba(255,255,255,.09)'));
+    for (let i = 0; i < 3; i++) head.push(side(6.7 + i * 0.28, 6.85 + i * 0.28, 9.6, 12.6, 11, 'rgba(12,18,32,.3)'));
+    head = head.concat(cube(11, 4.0, 10.0, 0.6, 2.2, 2.2, DARK));
+    head.push(side(4.5, 5.7, 10.5, 11.7, 11.6, '#4285F4', 'led2'));
+    let face;
+    if (mode === 'thinking') {
+      face = [
+        front(4.6, 5.7, 10.7, 11.8, 7.6, '#4285F4', 'think', 'animation-delay: 0s'),
+        front(6.0, 7.1, 10.7, 11.8, 7.6, '#EA4335', 'think', 'animation-delay: .15s'),
+        front(7.4, 8.5, 10.7, 11.8, 7.6, '#34A853', 'think', 'animation-delay: .3s'),
+        front(8.8, 9.9, 10.7, 11.8, 7.6, '#4285F4', 'think', 'animation-delay: .45s')
+      ];
+    } else {
+      const eh = mode === 'typing' ? 1.1 : 1.8;
+      face = [front(5.2, 6.6, 10.4, 10.4 + eh, 7.6, '#4285F4', 'blink glowe'), front(7.4, 8.8, 10.4, 10.4 + eh, 7.6, '#4285F4', 'blink glowe')];
+    }
+    const eyeStyle = 'transform: translate(' + (lx * 6).toFixed(1) + 'px, ' + (ly * 4 + lift).toFixed(1) + 'px)';
+    const partsA = [
+      part(arm(2.1), { outerStyle: 'animation-delay: .9s' }),
+      part(legs, { outerStyle: 'animation-delay: .2s', inner: '' }),
+      part(body, { outerStyle: 'animation-delay: .5s' }),
+      part(cube(6, 5, 8.1, 2, 1, 0.6, DARK), { outerStyle: 'animation-delay: 1.2s', innerStyle: headStyle }),
+      part(head, { outerStyle: 'animation-delay: 1.2s', innerStyle: headStyle }),
+      part(face, { outerStyle: 'animation-delay: 1.2s', innerStyle: eyeStyle })
+    ];
+    const partsB = [
+      part(cube(9.4, 4, 13.7, 0.4, 0.4, 2.4, DARK).concat(cube(9.1, 3.7, 16.1, 1, 1, 1, ANT, 'ant')), { outerStyle: 'animation-delay: 1.7s', innerStyle: headStyle }),
+      part(arm(10.5), { outerStyle: 'animation-delay: .9s', inner: 'wave', innerStyle: 'transform-origin: 64.2px 4.6px' })
+    ];
+    return { partsA, partsB, headStyle };
+  }
+  renderVals() {
+    const theme = this.state.theme || this.props.theme || 'light';
+    const mode = this.state.thinking ? 'thinking' : this.state.typing ? 'typing' : 'idle';
+    const r = this.robot(mode, this.state.lx, this.state.ly);
+    const tierDefs = [
+      { id: 'auto', label: 'Auto', c: 'transparent', ring: true, hint: 'The classifier picks a tier for you.' },
+      { id: 'fast', label: 'Fast', c: 'var(--green)', hint: 'Small, quick models for short answers.' },
+      { id: 'balanced', label: 'Balanced', c: 'var(--blue)', hint: 'Mid-size models for everyday work.' },
+      { id: 'deep', label: 'Deep', c: 'var(--red)', hint: 'The strongest free model, for hard problems.' }
+    ];
+    const tiers = tierDefs.map((d) => {
+      const on = d.id === this.state.tier;
+      return {
+        label: d.label, checked: on ? 'true' : 'false',
+        pick: () => this.setState({ tier: d.id }),
+        dotStyle: 'width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: ' + d.c + (d.ring ? '; box-shadow: inset 0 0 0 1.5px var(--ink)' : ''),
+        style: 'display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 16px; border: 0; border-radius: 999px; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; ' +
+          (on ? 'background: var(--card); color: var(--ink); box-shadow: var(--shadow)' : 'background: transparent; color: var(--muted)')
+      };
+    });
+    const recent = [
+      { title: 'Debounce in the router', meta: 'balanced · 3 turns', dot: 'var(--blue)' },
+      { title: 'Cloudflare tunnel headers', meta: 'fast · 5 turns', dot: 'var(--green)' },
+      { title: 'Classifier feature ideas', meta: 'deep · 9 turns', dot: 'var(--red)' },
+      { title: 'Edge node registration', meta: 'deep · 14 turns', dot: 'var(--red)' },
+      { title: 'Pi watchdog alerts', meta: 'fast · 2 turns', dot: 'var(--green)' }
+    ];
+    const providers = [
+      { name: 'Groq', ms: '210 ms' }, { name: 'Google AI Studio', ms: '340 ms' },
+      { name: 'Cerebras', ms: '180 ms' }, { name: 'OpenRouter', ms: '520 ms' }
+    ];
+    const status = { idle: 'Idle', typing: 'Listening', thinking: 'Thinking' }[mode];
+    return {
+      theme, mode, tiers, recent, providers,
+      starters: ['Refactor a Python function', 'Explain a stack trace', 'Draft a commit message', 'Compare two approaches'],
+      partsA: r.partsA, partsB: r.partsB, headStyle: r.headStyle,
+      tierHint: tierDefs.find((d) => d.id === this.state.tier).hint,
+      statusText: status,
+      statusDot: mode === 'thinking' ? 'var(--green)' : mode === 'typing' ? 'var(--blue)' : 'var(--muted)',
+      statusDotCls: mode === 'idle' ? '' : 'pulse',
+      themeLabel: theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme',
+      toggleTheme: () => this.setState({ theme: theme === 'light' ? 'dark' : 'light' }),
+      onLook: (e) => {
+        const b = e.currentTarget.getBoundingClientRect();
+        const lx = Math.max(-1, Math.min(1, ((e.clientX - b.left) / b.width - 0.5) * 2));
+        const ly = Math.max(-1, Math.min(1, ((e.clientY - b.top) / b.height - 0.5) * 2));
+        this.setState({ lx: lx, ly: ly });
+      },
+      onLeave: () => this.setState({ lx: 0, ly: 0 }),
+      onType: () => {
+        if (!this.state.typing) this.setState({ typing: true });
+        clearTimeout(this._t);
+        this._t = setTimeout(() => this.setState({ typing: false }), 900);
+      },
+      onSend: () => {
+        clearTimeout(this._k);
+        this.setState({ thinking: true, typing: false });
+        this._k = setTimeout(() => this.setState({ thinking: false }), 4200);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

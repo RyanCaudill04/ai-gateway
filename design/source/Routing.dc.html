@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Current — Routing</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+.light{--ground:#ECEFF3;--card:#FFFFFF;--well:#F4F6F9;--well2:#E8ECF1;--line:#E3E7ED;--ink:#0C1220;--muted:#566174;--blue:#4285F4;--blue-ink:#1A73E8;--green:#34A853;--green-ink:#188038;--red:#EA4335;--red-ink:#D93025;--on-blue:#FFFFFF;--shadow:0 1px 2px rgba(12,18,32,.04),0 12px 32px -14px rgba(12,18,32,.14);--stage:linear-gradient(180deg,#FBFCFD 0%,#EEF1F5 100%)}
+.dark{--ground:#05070A;--card:#10151C;--well:#171D26;--well2:#1F2631;--line:#232B37;--ink:#EEF2F7;--muted:#8B97A8;--blue:#8AB4F8;--blue-ink:#8AB4F8;--green:#81C995;--green-ink:#81C995;--red:#F28B82;--red-ink:#F28B82;--on-blue:#0A0E14;--shadow:inset 0 1px 0 rgba(255,255,255,.04),0 12px 32px -14px rgba(0,0,0,.7);--stage:linear-gradient(180deg,#151B24 0%,#0C1016 100%)}
+.card{background:var(--card);border-radius:28px;box-shadow:var(--shadow);box-sizing:border-box;min-width:0;min-height:0}
+.well{background:var(--well);border-radius:20px;padding:16px;box-sizing:border-box}
+.nav{transition:background .3s,color .3s,transform .35s cubic-bezier(.2,1.4,.4,1)}
+.nav:hover{background:var(--well2);color:var(--ink);transform:scale(1.06)}
+.pick{transition:background .3s,transform .35s cubic-bezier(.2,.8,.2,1)}
+.pick:hover{background:var(--well2);transform:translateX(3px)}
+.flow{background-image:linear-gradient(90deg,currentColor 50%,transparent 0);background-size:12px 2px;background-repeat:repeat-x;background-position-y:center}
+.flow.live{animation:flow .6s linear infinite}
+@keyframes flow{to{background-position-x:12px}}
+.lane{transition:opacity .5s ease,transform .5s cubic-bezier(.2,.8,.2,1)}
+.tierbox{transition:background .4s,box-shadow .4s}
+.bar{transition:width .8s cubic-bezier(.2,.8,.2,1),background .4s}
+.packet{animation:travel 1.4s cubic-bezier(.5,0,.5,1) infinite}
+@keyframes travel{0%{left:0;opacity:0}15%{opacity:1}85%{opacity:1}100%{left:calc(100% - 10px);opacity:0}}
+.spin{animation:spin 6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.swap{animation:swap .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes swap{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (max-width:960px){.root{flex-direction:column!important;height:auto!important}.shell{flex-direction:column!important}.side{width:auto!important}.body{grid-template-columns:minmax(0,1fr)!important}.body>*{grid-column:auto!important}.stats{grid-template-columns:minmax(0,1fr)!important}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="root {{theme}}" style="height: 100vh; min-height: 760px; box-sizing: border-box; padding: 12px; display: flex; flex-direction: column; gap: 12px; background: var(--ground); color: var(--ink); font-family: Geist, Inter, system-ui, sans-serif">
+
+  <nav class="card" aria-label="Primary" style="flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 10px 10px 18px; border-radius: 24px">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">
+      <svg width="30" height="30" viewBox="0 0 26 26" aria-hidden="true"><rect x="2" y="4" width="22" height="18" rx="6" style="fill: var(--well2)"></rect><rect x="5.5" y="7.5" width="15" height="11" rx="3.5" fill="#0E1218"></rect><rect x="8.5" y="11" width="3" height="4" rx="1.2" fill="#4285F4"></rect><rect x="14.5" y="11" width="3" height="4" rx="1.2" fill="#4285F4"></rect></svg>
+      current
+    </a>
+    <div style="display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 999px; background: var(--well)">
+      <a class="nav" href="Main.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"></rect><path d="M12 8v8M8 12h8"></path></svg>New</a>
+      <a class="nav" href="Chat.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path></svg>Chats</a>
+      <a class="nav" href="Routing.dc.html" aria-current="page" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; background: var(--card); color: var(--ink); box-shadow: var(--shadow)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2"></circle><path d="M6 7v4a5 5 0 0 0 5 5h7"></path><path d="M15 13l3 3-3 3"></path><path d="M6 11v8"></path></svg>Routing</a>
+      <a class="nav" href="Keys.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M16 7l3 3"></path></svg>Keys &amp; usage</a>
+    </div>
+    <button type="button" class="nav" onClick="{{toggleTheme}}" aria-label="{{themeLabel}}" style="width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--well); color: var(--ink); display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg></button>
+  </nav>
+  <div class="shell" style="flex: 1; min-height: 0; display: flex; gap: 12px">
+
+  <aside class="card side" aria-label="Recent requests" style="width: 280px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px; overflow-y: auto">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 12px">
+      <h2 style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">Requests</h2>
+      <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--well); font-size: 12px; font-weight: 500; color: var(--green-ink)"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: var(--green); display: inline-block"></span>live</span>
+    </div>
+    <sc-for list="{{reqs}}" as="r" hint-placeholder-count="6">
+      <button type="button" class="pick" onClick="{{r.pick}}" aria-pressed="{{r.pressed}}" style="{{r.style}}">
+        <span style="font-size: 14px; font-weight: 500; text-align: left; color: var(--ink)">{{r.prompt}}</span>
+        <span style="display: flex; align-items: center; gap: 6px; font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: {{r.dot}}; display: inline-block"></span>{{r.tier}} · {{r.ms}} ms</span>
+      </button>
+    </sc-for>
+  </aside>
+
+  <div class="body" style="flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px">
+    <main class="card" style="grid-column: span 8; display: flex; flex-direction: column; overflow: hidden">
+      <header style="flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 24px 0">
+        <h1 style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">Routing</h1>
+        <span style="padding: 6px 12px; border-radius: 999px; background: var(--well); font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">classifier [VERSION]</span>
+      </header>
+
+      <section aria-label="Routing path" style="flex: 1; min-height: 0; margin: 14px 14px 0; border-radius: 22px; background: var(--stage); padding: 32px; display: flex; flex-direction: column; justify-content: center; gap: 28px">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+          <div class="swap" style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border-radius: 20px; background: var(--card); box-shadow: var(--shadow)">
+            <span style="font-size: 12px; font-weight: 500; color: var(--muted)">Prompt</span>
+            <span style="font-size: 16px; line-height: 1.45; font-weight: 500">{{cur.prompt}}</span>
+          </div>
+          <div aria-hidden="true" style="position: relative; width: 72px; height: 10px">
+            <div class="flow live" style="position: absolute; left: 0; right: 0; top: 4px; height: 2px; color: var(--muted)"></div>
+            <div class="packet" style="position: absolute; top: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--blue)"></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 14px 20px 14px 14px; border-radius: 999px; background: var(--ink); color: var(--card)">
+            <span class="spin" aria-hidden="true" style="width: 24px; height: 24px; border-radius: 50%; background: conic-gradient(#4285F4 0 33%, #EA4335 0 66%, #34A853 0); display: inline-block"></span>
+            <span style="display: flex; flex-direction: column">
+              <span style="font-size: 14px; font-weight: 600">Classifier</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 12px; opacity: .7">{{cur.cms}} ms to decide</span>
+            </span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <sc-for list="{{lanes}}" as="l" hint-placeholder-count="3">
+            <div class="lane" style="{{l.rowStyle}}">
+              <div aria-hidden="true" class="{{l.flowClass}}" style="{{l.flowStyle}}"></div>
+              <div class="tierbox" style="{{l.tierStyle}}"><span style="display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50%; background: {{l.c}}; display: inline-block"></span>{{l.name}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px">{{l.score}}</span></div>
+              <div style="flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+                <div style="height: 8px; border-radius: 999px; background: var(--well2)"><div class="bar" style="{{l.barStyle}}"></div></div>
+                <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">{{l.models}}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section class="stats" aria-label="Result" style="flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px">
+        <div class="well" style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: var(--muted)">Served by</span><span class="swap" style="font-size: 18px; font-weight: 600">{{cur.model}}</span></div>
+        <div class="well" style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: var(--muted)">Provider</span><span class="swap" style="font-size: 18px; font-weight: 600">{{cur.provider}}</span></div>
+        <div class="well" style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: var(--muted)">Total latency</span><span class="swap" style="font-size: 18px; font-weight: 600">{{cur.ms}} ms</span></div>
+      </section>
+    </main>
+
+    <aside class="card" aria-label="Details" style="grid-column: span 4; padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto">
+      <section class="well" style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted)">Signals the classifier saw</h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <sc-for list="{{cur.signals}}" as="g" hint-placeholder-count="3">
+            <span style="padding: 7px 12px; border-radius: 999px; background: var(--card); font-family: 'Geist Mono', monospace; font-size: 12px">{{g}}</span>
+          </sc-for>
+        </div>
+      </section>
+      <section class="well" style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted)">Today by tier</h2>
+        <div aria-hidden="true" style="display: flex; height: 12px; gap: 3px">
+          <div style="width: 52%; border-radius: 999px; background: var(--green)"></div>
+          <div style="width: 34%; border-radius: 999px; background: var(--blue)"></div>
+          <div style="width: 14%; border-radius: 999px; background: var(--red)"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px">
+          <span style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block"></span>Fast<span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">52%</span></span>
+          <span style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: var(--blue); display: inline-block"></span>Balanced<span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">34%</span></span>
+          <span style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: var(--red); display: inline-block"></span>Deep<span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">14%</span></span>
+        </div>
+      </section>
+      <section class="well" style="display: flex; flex-direction: column; gap: 6px">
+        <h2 style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted)">Fallbacks today</h2>
+        <span style="font-size: 30px; font-weight: 600; letter-spacing: -0.03em">[COUNT]</span>
+        <span style="font-size: 13px; color: var(--muted)">Times a provider was skipped for rate limits or errors.</span>
+      </section>
+    </aside>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { theme: null, sel: 0 }; }
+  renderVals() {
+    const theme = this.state.theme || this.props.theme || 'light';
+    const tierColor = { Fast: 'var(--green)', Balanced: 'var(--blue)', Deep: 'var(--red)' };
+    const data = [
+      { prompt: 'Debounce duplicate requests within one second', tier: 'Balanced', ms: 412, cms: 9, model: 'llama-3.3-70b', provider: 'Groq', s: [0.18, 0.71, 0.11], signals: ['code-related', 'design question', '14 tokens'] },
+      { prompt: 'What does HTTP 524 mean?', tier: 'Fast', ms: 186, cms: 7, model: 'gemini-2.5-flash-lite', provider: 'Google AI Studio', s: [0.86, 0.12, 0.02], signals: ['factual', 'short', '6 tokens'] },
+      { prompt: 'Design a schema for edge node registration with heartbeats', tier: 'Deep', ms: 2140, cms: 11, model: 'gemini-2.5-pro', provider: 'Google AI Studio', s: [0.04, 0.29, 0.67], signals: ['multi-step', 'system design', '11 tokens'] },
+      { prompt: 'Write a commit message for this diff', tier: 'Fast', ms: 231, cms: 8, model: 'llama-3.1-8b', provider: 'Groq', s: [0.79, 0.19, 0.02], signals: ['rewrite', 'code attached'] },
+      { prompt: 'Compare Durable Objects vs KV for rate limits', tier: 'Balanced', ms: 978, cms: 10, model: 'qwen-3-32b', provider: 'Cerebras', s: [0.09, 0.62, 0.29], signals: ['comparison', 'infrastructure'] },
+      { prompt: 'Prove this scheduling heuristic is optimal', tier: 'Deep', ms: 3310, cms: 12, model: 'deepseek-r1', provider: 'OpenRouter', s: [0.02, 0.18, 0.80], signals: ['reasoning', 'math'] }
+    ];
+    const sel = this.state.sel;
+    const cur = data[sel];
+    const reqs = data.map((d, i) => {
+      const on = i === sel;
+      return {
+        prompt: d.prompt, tier: d.tier.toLowerCase(), ms: d.ms, dot: tierColor[d.tier],
+        pressed: on ? 'true' : 'false',
+        pick: () => this.setState({ sel: i }),
+        style: 'display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px; border: 0; border-radius: 16px; font-family: inherit; cursor: pointer; ' +
+          (on ? 'background: var(--well2)' : 'background: transparent')
+      };
+    });
+    const laneDefs = [
+      { name: 'Fast', models: 'llama-3.1-8b → gemini-2.5-flash-lite' },
+      { name: 'Balanced', models: 'llama-3.3-70b → qwen-3-32b' },
+      { name: 'Deep', models: 'gemini-2.5-pro → deepseek-r1' }
+    ];
+    const lanes = laneDefs.map((l, i) => {
+      const on = l.name === cur.tier;
+      const c = tierColor[l.name];
+      const score = cur.s[i];
+      return {
+        name: l.name, models: l.models, c: c, score: score.toFixed(2),
+        flowClass: on ? 'flow live' : 'flow',
+        rowStyle: 'display: flex; flex-wrap: wrap; align-items: center; gap: 16px; opacity: ' + (on ? 1 : 0.5) + '; transform: translateX(' + (on ? 8 : 0) + 'px)',
+        flowStyle: 'width: 64px; height: 2px; color: ' + (on ? c : 'var(--well2)'),
+        tierStyle: 'display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 190px; padding: 14px 18px; border-radius: 999px; box-sizing: border-box; color: var(--ink); ' +
+          (on ? 'background: var(--card); box-shadow: 0 0 0 2px ' + c + ', 0 12px 28px -12px ' + c : 'background: var(--card)'),
+        barStyle: 'height: 8px; border-radius: 999px; width: ' + Math.round(score * 100) + '%; background: ' + (on ? c : 'var(--muted)')
+      };
+    });
+    return {
+      theme, reqs, lanes, cur,
+      themeLabel: theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme',
+      toggleTheme: () => this.setState({ theme: theme === 'light' ? 'dark' : 'light' })
+    };
+  }
+}
+</script>
+</body>
+</html>
