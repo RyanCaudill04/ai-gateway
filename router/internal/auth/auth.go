@@ -10,11 +10,12 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
 )
 
 // Identity is the authenticated caller of a request.
@@ -49,18 +50,18 @@ func IdentityFrom(ctx context.Context) (Identity, bool) {
 }
 
 // Require runs next only for requests that a authenticates. Everything else
-// gets a JSON error and never reaches next.
+// gets an apierror response and never reaches next.
 func Require(a Authenticator, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, err := a.Authenticate(r)
 		if err != nil {
-			status, code, msg := http.StatusUnauthorized, "unauthorized", "Sign-in required."
+			apiErr := apierror.Unauthorized("Sign-in required.")
 			switch {
 			case errors.Is(err, ErrForbidden):
-				status, code, msg = http.StatusForbidden, "forbidden", "This account may not use this gateway."
+				apiErr = apierror.Forbidden("forbidden", "This account may not use this gateway.")
 			case errors.Is(err, ErrNotConfigured):
-				status, code, msg = http.StatusServiceUnavailable, "auth_not_configured",
-					"The gateway's authentication is not configured. See the router logs."
+				apiErr = apierror.Unavailable("auth_not_configured",
+					"The gateway's authentication is not configured. See the router logs.")
 			}
 			// The reason goes to the log only: telling the caller *why* a token
 			// failed helps someone forging one more than it helps me.
@@ -73,20 +74,11 @@ func Require(a Authenticator, next http.Handler) http.Handler {
 			if errors.Is(err, ErrNoCredentials) || errors.Is(err, ErrNotConfigured) {
 				level = slog.LevelDebug
 			}
-			slog.Log(r.Context(), level, "request rejected", "status", status, "method", r.Method, "path", r.URL.Path, "reason", err.Error())
-			writeError(w, status, code, msg)
+			slog.Log(r.Context(), level, "request rejected", "status", apiErr.Status, "method", r.Method, "path", r.URL.Path, "reason", err.Error())
+			apierror.Write(w, apiErr)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), contextKey{}, id)))
-	})
-}
-
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]any{
-		"error": map[string]string{"code": code, "message": message},
 	})
 }
 

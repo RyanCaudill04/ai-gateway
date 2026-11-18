@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/RyanCaudill04/ai-gateway/router/internal/api"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
@@ -185,7 +186,10 @@ func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled
 	// rejects state-changing requests that a browser marks as cross-origin.
 	// Non-browser clients don't send those markers and are unaffected.
 	csrf := http.NewCrossOriginProtection()
-	mux.Handle("/", auth.Require(authn, csrf.Handler(protected)))
+	csrf.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apierror.Write(w, apierror.Forbidden("cross_origin_forbidden", "Cross-origin requests are not allowed."))
+	}))
+	mux.Handle("/", auth.Require(authn, csrf.Handler(apierror.Routes(protected))))
 
 	return mux
 }
