@@ -5,6 +5,8 @@ const PATHS = {
   chevronDown: 'M6 9l6 6 6-6',
   arrowUp: 'M12 19V5M5 12l7-7 7 7',
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
+  // ↗: a link that opens something (landing "Start with" rows).
+  arrowUpRight: 'M7 17 17 7M9 7h8v8',
   slash: 'M16 4L8 20',
   check: 'M5 12l5 5 9-10',
   // Two stacked boxes with a light on each: a rack of servers.
