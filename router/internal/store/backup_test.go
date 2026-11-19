@@ -76,8 +76,8 @@ func TestBackupDuringConcurrentWrites(t *testing.T) {
 	if err := b.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&migrations); err != nil {
 		t.Fatalf("schema_migrations missing from backup: %v", err)
 	}
-	if migrations != 1 {
-		t.Fatalf("schema_migrations rows = %d, want 1", migrations)
+	if want := migrationCount(t); migrations != want {
+		t.Fatalf("schema_migrations rows = %d, want %d", migrations, want)
 	}
 
 	// Every row in the backup must be a row the writers committed; the backup

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -79,7 +80,7 @@ func wantEnvelope(t *testing.T, w *httptest.ResponseRecorder, typ, code string) 
 }
 
 func TestOnlyHealthChecksArePublic(t *testing.T) {
-	h := newHandler(denyAll{}, nil, testConfig(t), allEnabled)
+	h := newHandler(handlerDeps{authn: denyAll{}, cfg: testConfig(t), enabled: allEnabled})
 
 	for _, path := range []string{"/healthz", "/api/health"} {
 		if w := do(h, "GET", path); w.Code != http.StatusOK {
@@ -107,7 +108,7 @@ func TestOnlyHealthChecksArePublic(t *testing.T) {
 }
 
 func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
-	h := newHandler(auth.Locked(errors.New("CF_ACCESS_AUD is empty")), nil, testConfig(t), allEnabled)
+	h := newHandler(handlerDeps{authn: auth.Locked(errors.New("CF_ACCESS_AUD is empty")), cfg: testConfig(t), enabled: allEnabled})
 
 	if w := do(h, "GET", "/api/health"); w.Code != http.StatusOK {
 		t.Errorf("GET /api/health = %d, want 200", w.Code)
@@ -123,23 +124,116 @@ func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
 }
 
 func TestModelsEndpointRequiresAuthAndListsModels(t *testing.T) {
-	if w := do(newHandler(denyAll{}, nil, testConfig(t), allEnabled), "GET", "/v1/models"); w.Code != http.StatusUnauthorized {
+	if w := do(newHandler(handlerDeps{authn: denyAll{}, cfg: testConfig(t), enabled: allEnabled}), "GET", "/v1/models"); w.Code != http.StatusUnauthorized {
 		t.Errorf("unauthenticated GET /v1/models = %d, want 401", w.Code)
 	}
 
-	w := do(newHandler(auth.Disabled(), nil, testConfig(t), allEnabled), "GET", "/v1/models")
+	w := do(newHandler(handlerDeps{authn: auth.Disabled(), cfg: testConfig(t), enabled: allEnabled}), "GET", "/v1/models")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"id":"groq/llama"`) {
 		t.Errorf("GET /v1/models = %d %s", w.Code, w.Body)
 	}
 }
 
 func TestProviderEnabledFollowsConfig(t *testing.T) {
-	enabled := providerEnabled(testConfig(t))
-	// Remote providers need a key (none can be registered until #40); local ones don't.
+	registered := map[string]bool{}
+	enabled := providerEnabled(testConfig(t), func(name string) bool { return registered[name] })
+	// Remote providers need a key; local ones don't. A key for a provider
+	// that isn't in the config enables nothing.
+	registered["nope"] = true
 	for name, want := range map[string]bool{"ollama": true, "groq": false, "nope": false} {
 		if got := enabled(name); got != want {
 			t.Errorf("providerEnabled(%q) = %v, want %v", name, got, want)
 		}
+	}
+	// Evaluated per call, not captured at startup.
+	registered["groq"] = true
+	if !enabled("groq") {
+		t.Error("providerEnabled(groq) didn't follow a newly registered key")
+	}
+}
+
+// TestModelsFollowKeyChanges registers a key through the admin API and
+// checks GET /v1/models shows the provider on the very next request, then
+// hides it again once the key is removed.
+func TestModelsFollowKeyChanges(t *testing.T) {
+	cfg := testConfig(t)
+	keys := testKeys(t)
+	enabled := providerEnabled(cfg, keys.Has)
+	pub := newHandler(handlerDeps{authn: auth.Disabled(), cfg: cfg, enabled: enabled})
+	adm := newAdminHandler(cfg, keys, enabled)
+
+	hasGroq := func() bool {
+		w := do(pub, "GET", "/v1/models")
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /v1/models = %d", w.Code)
+		}
+		return strings.Contains(w.Body.String(), `"id":"groq/llama"`)
+	}
+	if hasGroq() {
+		t.Fatal("groq listed before a key was registered")
+	}
+
+	adminDo := func(method, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/admin/providers/groq/key", strings.NewReader(body))
+		r.Host = "127.0.0.1:8081"
+		w := httptest.NewRecorder()
+		adm.ServeHTTP(w, r)
+		return w
+	}
+	if w := adminDo("PUT", `{"key":"`+cliTestKey+`"}`); w.Code != http.StatusOK {
+		t.Fatalf("PUT key = %d %s", w.Code, w.Body)
+	}
+	if !hasGroq() {
+		t.Fatal("groq not listed right after its key was registered")
+	}
+	if got, ok := keys.Get("groq"); !ok || got != cliTestKey {
+		t.Fatalf("keys.Get(groq) = %q, %v", got, ok)
+	}
+	if w := adminDo("DELETE", ""); w.Code != http.StatusOK {
+		t.Fatalf("DELETE key = %d %s", w.Code, w.Body)
+	}
+	if hasGroq() {
+		t.Fatal("groq still listed after its key was removed")
+	}
+}
+
+// setServerEnv points run() at temp paths with a valid master key and a
+// loopback admin port picked by the OS.
+func setServerEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("GATEWAY_SECRET_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	t.Setenv("ADMIN_ADDR", "127.0.0.1:0")
+	t.Setenv("DATABASE_PATH", filepath.Join(t.TempDir(), "gateway.db"))
+	good := filepath.Join(t.TempDir(), "providers.yaml")
+	if err := os.WriteFile(good, []byte(testProviders), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PROVIDERS_CONFIG", good)
+}
+
+func TestRunRefusesBadMasterKey(t *testing.T) {
+	for name, value := range map[string]string{
+		"missing":      "",
+		"not base64":   "not-base64!!",
+		"wrong length": base64.StdEncoding.EncodeToString(make([]byte, 16)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			setServerEnv(t)
+			t.Setenv("GATEWAY_SECRET_KEY", value)
+			err := run("127.0.0.1:0")
+			if err == nil || !strings.Contains(err.Error(), "GATEWAY_SECRET_KEY") {
+				t.Errorf("run() = %v, want a GATEWAY_SECRET_KEY error", err)
+			}
+		})
+	}
+}
+
+func TestRunRefusesNonLoopbackAdminAddr(t *testing.T) {
+	setServerEnv(t)
+	t.Setenv("ADMIN_ADDR", ":0")
+	err := run("127.0.0.1:0")
+	if err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Errorf("run() = %v, want a loopback error", err)
 	}
 }
 
@@ -153,8 +247,8 @@ func TestRunStopsOnBadProvidersConfig(t *testing.T) {
 		"invalid file": invalid,
 	} {
 		t.Run(name, func(t *testing.T) {
+			setServerEnv(t)
 			t.Setenv("PROVIDERS_CONFIG", path)
-			t.Setenv("DATABASE_PATH", filepath.Join(t.TempDir(), "gateway.db"))
 			err := run("127.0.0.1:0")
 			if err == nil || !strings.Contains(err.Error(), "providers") {
 				t.Errorf("run() = %v, want a providers config error", err)
@@ -164,7 +258,7 @@ func TestRunStopsOnBadProvidersConfig(t *testing.T) {
 }
 
 func TestAuthenticatedRequests(t *testing.T) {
-	h := newHandler(auth.Disabled(), nil, testConfig(t), allEnabled)
+	h := newHandler(handlerDeps{authn: auth.Disabled(), cfg: testConfig(t), enabled: allEnabled})
 
 	w := do(h, "GET", "/api/me")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"email"`) {
@@ -191,6 +285,19 @@ func TestAuthenticatedRequests(t *testing.T) {
 	}
 }
 
+// The chat endpoint is registered behind auth: once signed in, an unknown
+// model reaches the handler and gets its 404 rather than the mux's.
+func TestChatCompletionsIsRegistered(t *testing.T) {
+	h := newHandler(handlerDeps{authn: auth.Disabled(), cfg: testConfig(t), enabled: allEnabled})
+	r := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(`{"model":"nope","messages":[]}`))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", w.Code, w.Body)
+	}
+	wantEnvelope(t, w, "invalid_request", "model_not_found")
+}
+
 type forbidAll struct{}
 
 func (forbidAll) Authenticate(*http.Request) (auth.Identity, error) {
@@ -198,7 +305,7 @@ func (forbidAll) Authenticate(*http.Request) (auth.Identity, error) {
 }
 
 func TestForbiddenCallerGetsEnvelope(t *testing.T) {
-	w := do(newHandler(forbidAll{}, nil, testConfig(t), allEnabled), "GET", "/v1/models")
+	w := do(newHandler(handlerDeps{authn: forbidAll{}, cfg: testConfig(t), enabled: allEnabled}), "GET", "/v1/models")
 	if w.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", w.Code)
 	}
