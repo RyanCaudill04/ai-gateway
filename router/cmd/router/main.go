@@ -29,6 +29,7 @@ import (
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
 
 func main() {
@@ -85,9 +86,17 @@ func run(addr string) error {
 	}
 	defer db.Close()
 
+	handler := newHandler(handlerDeps{
+		authn:       newAuthenticator(),
+		db:          db,
+		cfg:         cfg,
+		enabled:     providerEnabled(cfg),
+		upstream:    upstream.New(upstream.Options{}),
+		providerKey: providerKey,
+	})
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(newAuthenticator(), db, cfg, providerEnabled(cfg)),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		// No WriteTimeout on purpose: streamed completions can run for minutes.
 	}
@@ -125,6 +134,12 @@ func run(addr string) error {
 // the key store; startup and the request-time check below both use it.
 func hasKey(provider string) bool { return false }
 
+// providerKey returns a provider's API key for the chat endpoint. Like hasKey
+// it is a placeholder until key storage lands (#40), which replaces this body
+// with a lookup in the key store. Local providers never get here: they need
+// no key.
+func providerKey(provider string) (string, bool) { return "", false }
+
 // providerEnabled answers "can this provider be used right now?" and is called
 // on every request, not once at startup, so a key registered while the router
 // runs takes effect without a restart. It mirrors the rule the config package
@@ -139,11 +154,29 @@ func providerEnabled(cfg *config.Config) api.EnabledFunc {
 // pinger is the part of the store /healthz needs. nil skips the check (tests).
 type pinger interface{ Ping(context.Context) error }
 
+// handlerDeps is everything the routes need. The chat hooks left nil mean
+// "nothing registered" (see api.ChatDeps), which is what tests use.
+type handlerDeps struct {
+	authn   auth.Authenticator
+	db      pinger
+	cfg     *config.Config
+	enabled api.EnabledFunc
+
+	upstream    *upstream.Client     // nil: a client with the default timeouts
+	providerKey api.KeyFunc          // provider API keys (#40); nil: none
+	observer    api.UpstreamObserver // rate-limit tracker (#16); nil: none
+	onSummary   api.SummaryFunc      // request log (#15); nil: none
+}
+
 // newHandler builds the router's routes. Access is deny-by-default: the only
 // public routes are the two health checks registered by name below. Every
 // other path, including ones that don't exist yet, goes through authn first,
 // so a new endpoint can't be left open by forgetting to protect it.
-func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled api.EnabledFunc) http.Handler {
+func newHandler(d handlerDeps) http.Handler {
+	authn, db, cfg, enabled := d.authn, d.db, d.cfg, d.enabled
+	if d.upstream == nil {
+		d.upstream = upstream.New(upstream.Options{})
+	}
 	mux := http.NewServeMux()
 
 	// Internal only: Caddy forwards /v1/* and /api/* unchanged, so this
@@ -180,6 +213,14 @@ func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled
 	})
 
 	protected.Handle("GET /v1/models", api.Models(cfg, enabled))
+	protected.Handle("POST /v1/chat/completions", api.Chat(api.ChatDeps{
+		Config:    cfg,
+		Enabled:   enabled,
+		Client:    d.upstream,
+		Key:       d.providerKey,
+		Observer:  d.observer,
+		OnSummary: d.onSummary,
+	}))
 
 	// The browser proves who it is with a cookie that it sends automatically,
 	// so another site could try to make it send requests here (CSRF). This

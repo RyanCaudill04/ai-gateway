@@ -153,6 +153,47 @@ func TestExpandAndNormalize(t *testing.T) {
 	}
 }
 
+// Model IDs can contain slashes themselves (Groq's "openai/gpt-oss-20b",
+// Workers AI's "@cf/openai/gpt-oss-20b"). Provider names can't, so Lookup
+// splits at the first slash only.
+func TestLookupModelIDsWithSlashes(t *testing.T) {
+	const yaml = `
+providers:
+  groq:
+    base_url: https://groq.example/v1
+    models:
+      - id: openai/gpt-oss-20b
+        context_length: 131072
+  workers-ai:
+    base_url: https://cf.example/v1
+    models:
+      - id: "@cf/openai/gpt-oss-20b"
+        context_length: 131072
+routes:
+  fast: [groq/openai/gpt-oss-20b, workers-ai/@cf/openai/gpt-oss-20b]
+`
+	cfg, err := Parse([]byte(yaml), env(nil), keys("groq", "workers-ai"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		id, provider, model string
+		ok                  bool
+	}{
+		{"groq/openai/gpt-oss-20b", "groq", "openai/gpt-oss-20b", true},
+		{"workers-ai/@cf/openai/gpt-oss-20b", "workers-ai", "@cf/openai/gpt-oss-20b", true},
+		{"openai/gpt-oss-20b", "", "", false}, // the bare model ID is not a provider/model
+		{"groq/openai", "", "", false},
+		{"groq/openai/gpt-oss-20b/", "", "", false},
+	}
+	for _, tt := range tests {
+		p, m, ok := cfg.Lookup(tt.id)
+		if ok != tt.ok || (ok && (p.Name != tt.provider || m.ID != tt.model)) {
+			t.Errorf("Lookup(%q) = %v %v %v, want %s %s %v", tt.id, p, m, ok, tt.provider, tt.model, tt.ok)
+		}
+	}
+}
+
 // The shipped example must always parse, so it can't silently rot.
 func TestExampleConfigIsValid(t *testing.T) {
 	data, err := os.ReadFile("../../../config/providers.example.yaml")
