@@ -1,0 +1,92 @@
+/* Colour, type and motion tokens for the "Current" design (design/spec.md §2,
+   §3, §6). Every screen reads these; nothing else should hard-code a colour.
+
+   Light is the default. Dark applies when the system asks for it, unless the
+   user picked light with the theme button, or always when they picked dark.
+   The button sets data-theme on <html> (see useTheme.ts). */
+
+:root {
+  --ground: #eceff3;
+  --card: #ffffff;
+  --well: #f4f6f9;
+  --well2: #e8ecf1;
+  --line: #e3e7ed;
+  --ink: #0c1220;
+  --muted: #566174;
+  --blue: #4285f4;
+  --blue-ink: #1a73e8;
+  --green: #34a853;
+  --green-ink: #188038;
+  --red: #ea4335;
+  --red-ink: #d93025;
+  --on-blue: #ffffff;
+  --code: #0f1520;
+  --shadow: 0 1px 2px rgba(12, 18, 32, 0.04),
+    0 12px 32px -14px rgba(12, 18, 32, 0.14);
+  --stage: linear-gradient(180deg, #fbfcfd 0%, #eef1f5 100%);
+
+  --font: Geist, Inter, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, Consolas, monospace;
+
+  /* Overshoots a little: hover and press scales. */
+  --spring: cubic-bezier(0.2, 1.4, 0.4, 1);
+  /* No overshoot: rises and slides. */
+  --smooth: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  color-scheme: light;
+}
+
+/* The dark values, written once and applied by the two selectors below. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ground: #05070a;
+    --card: #10151c;
+    --well: #171d26;
+    --well2: #1f2631;
+    --line: #232b37;
+    --ink: #eef2f7;
+    --muted: #8b97a8;
+    --blue: #8ab4f8;
+    --blue-ink: #8ab4f8;
+    --green: #81c995;
+    --green-ink: #81c995;
+    --red: #f28b82;
+    --red-ink: #f28b82;
+    --on-blue: #0a0e14;
+    --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 12px 32px -14px rgba(0, 0, 0, 0.7);
+    --stage: linear-gradient(180deg, #151b24 0%, #0c1016 100%);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --ground: #05070a;
+  --card: #10151c;
+  --well: #171d26;
+  --well2: #1f2631;
+  --line: #232b37;
+  --ink: #eef2f7;
+  --muted: #8b97a8;
+  --blue: #8ab4f8;
+  --blue-ink: #8ab4f8;
+  --green: #81c995;
+  --green-ink: #81c995;
+  --red: #f28b82;
+  --red-ink: #f28b82;
+  --on-blue: #0a0e14;
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 12px 32px -14px rgba(0, 0, 0, 0.7);
+  --stage: linear-gradient(180deg, #151b24 0%, #0c1016 100%);
+  color-scheme: dark;
+}
+
+/* Spec §1.3: every animation and transition is off under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
