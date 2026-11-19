@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Current — Palette</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.think{animation:think 1.2s ease-in-out infinite}
+@keyframes think{0%,100%{opacity:.2;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; background: #FFFFFF; font-family: Geist, Inter, system-ui, sans-serif; color: #0C1220; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr); gap: 0; border: 1px solid #E2E7EE">
+
+  <header style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; padding: 28px 32px; border-bottom: 1px solid #E2E7EE">
+    <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.03em">Palette v3 — white, then Google blue · green · red</h1>
+    <span style="font-size: 14px; color: #566174">Three colours, three meanings. Everything else is neutral.</span>
+  </header>
+
+  <section aria-label="Functional colours" style="grid-column: 1 / span 8; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #E2E7EE">
+    <div style="display: flex; flex-direction: column; border-right: 1px solid #E2E7EE">
+      <div style="flex: 1; background: #4285F4"></div>
+      <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 16px; font-weight: 600">Blue — act · Balanced</span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #566174">#4285F4 · text #1A73E8 · dark #8AB4F8</span>
+        <span style="font-size: 13px; color: #566174">Send, primary buttons, focus, selection, robot eyes.</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; border-right: 1px solid #E2E7EE">
+      <div style="flex: 1; background: #34A853"></div>
+      <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 16px; font-weight: 600">Green — healthy · Fast</span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #566174">#34A853 · text #188038 · dark #81C995</span>
+        <span style="font-size: 13px; color: #566174">Live status, providers up, headroom left, the PCB.</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column">
+      <div style="flex: 1; background: #EA4335"></div>
+      <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 16px; font-weight: 600">Red — attention · Deep</span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #566174">#EA4335 · text #D93025 · dark #F28B82</span>
+        <span style="font-size: 13px; color: #566174">Errors, quota nearly spent, revoke, antenna light.</span>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Thinking" style="grid-column: 9 / span 4; padding: 28px; display: flex; flex-direction: column; justify-content: space-between; border-left: 1px solid #E2E7EE; border-bottom: 1px solid #E2E7EE; background: #0A0E14; color: #EEF2F7">
+    <span style="font-size: 16px; font-weight: 600">Thinking</span>
+    <div aria-hidden="true" style="display: flex; gap: 8px">
+      <span class="think" style="width: 18px; height: 18px; border-radius: 4px; background: #4285F4; display: inline-block"></span>
+      <span class="think" style="width: 18px; height: 18px; border-radius: 4px; background: #EA4335; display: inline-block; animation-delay: .15s"></span>
+      <span class="think" style="width: 18px; height: 18px; border-radius: 4px; background: #34A853; display: inline-block; animation-delay: .3s"></span>
+      <span class="think" style="width: 18px; height: 18px; border-radius: 4px; background: #4285F4; display: inline-block; animation-delay: .45s"></span>
+    </div>
+    <span style="font-size: 13px; color: #8B97A8">The robot's visor pixels cycle through all three colours, the same as the indicator in chat.</span>
+  </section>
+
+  <section aria-label="Light neutrals" style="grid-column: 1 / span 6; padding: 24px 32px; display: flex; flex-direction: column; gap: 14px; border-right: 1px solid #E2E7EE">
+    <span style="font-size: 16px; font-weight: 600">Light neutrals — cool, mostly white</span>
+    <div style="flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px">
+      <div style="border-radius: 10px; background: #FFFFFF; border: 1px solid #E2E7EE; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 13px; font-weight: 500">Ground</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #566174">#FFFFFF</span></div>
+      <div style="border-radius: 10px; background: #F6F8FB; border: 1px solid #E2E7EE; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 13px; font-weight: 500">Panel</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #566174">#F6F8FB</span></div>
+      <div style="border-radius: 10px; background: #E2E7EE; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 13px; font-weight: 500">Line</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #3F4857">#E2E7EE</span></div>
+      <div style="border-radius: 10px; background: #566174; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; color: #FFFFFF"><span style="font-size: 13px; font-weight: 500">Muted</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px">#566174</span></div>
+      <div style="border-radius: 10px; background: #0C1220; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; color: #FFFFFF"><span style="font-size: 13px; font-weight: 500">Ink</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px">#0C1220</span></div>
+    </div>
+  </section>
+
+  <section aria-label="Dark neutrals" style="grid-column: 7 / span 6; padding: 24px 32px; display: flex; flex-direction: column; gap: 14px; background: #0A0E14; color: #EEF2F7">
+    <span style="font-size: 16px; font-weight: 600">Dark neutrals — blue-black</span>
+    <div style="flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px">
+      <div style="border-radius: 10px; background: #0A0E14; border: 1px solid #1E2633; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 13px; font-weight: 500">Ground</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8B97A8">#0A0E14</span></div>
+      <div style="border-radius: 10px; background: #0F141C; border: 1px solid #1E2633; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 13px; font-weight: 500">Panel</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8B97A8">#0F141C</span></div>
+      <div style="border-radius: 10px; background: #1E2633; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end"><span style="font-size: 13px; font-weight: 500">Line</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #A9B4C4">#1E2633</span></div>
+      <div style="border-radius: 10px; background: #8B97A8; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; color: #0A0E14"><span style="font-size: 13px; font-weight: 500">Muted</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px">#8B97A8</span></div>
+      <div style="border-radius: 10px; background: #EEF2F7; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; color: #0A0E14"><span style="font-size: 13px; font-weight: 500">Ink</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px">#EEF2F7</span></div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

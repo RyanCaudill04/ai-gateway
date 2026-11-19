@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wireframe C — Bento grid</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.b{border:1.5px solid #A3A8B2;border-radius:20px;box-sizing:border-box;position:relative}
+.d{border:1.5px dashed #C3C7CE;border-radius:12px;box-sizing:border-box;position:relative}
+.l{position:absolute;top:12px;left:16px;font:500 12px ui-monospace,Menlo,monospace;color:#6A707C}
+.ln{height:10px;border-radius:5px;background:#E3E5E9}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; background: #FAFAFA; display: flex; flex-direction: column; gap: 16px; padding: 20px 24px 24px; font-family: system-ui, sans-serif">
+  <div class="b" style="height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 20px">
+    <div style="display: flex; align-items: center; gap: 10px"><div class="b" style="width: 24px; height: 24px; border-radius: 50%"></div><div class="ln" style="width: 72px"></div></div>
+    <div style="display: flex; gap: 8px"><div class="b" style="width: 72px; height: 36px; border-radius: 18px"></div><div class="d" style="width: 72px; height: 36px; border-radius: 18px"></div><div class="d" style="width: 72px; height: 36px; border-radius: 18px"></div><div class="d" style="width: 96px; height: 36px; border-radius: 18px"></div></div>
+    <div class="d" style="width: 140px; height: 36px; border-radius: 18px"></div>
+  </div>
+  <div style="flex: 1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(6, minmax(0, 1fr)); gap: 16px; min-height: 0">
+    <div class="b" style="grid-column: 1 / span 3; grid-row: 1 / span 4; padding: 44px 14px 14px; display: flex; flex-direction: column; gap: 8px">
+      <span class="l">chat list</span>
+      <div class="d" style="height: 52px"></div><div class="d" style="height: 52px"></div><div class="d" style="height: 52px"></div><div class="d" style="height: 52px"></div>
+    </div>
+    <div class="b" style="grid-column: 1 / span 3; grid-row: 5 / span 2"><span class="l">robot (mini, idle) · status</span></div>
+    <div class="b" style="grid-column: 4 / span 6; grid-row: 1 / span 5; padding: 44px 24px 20px; display: flex; flex-direction: column; gap: 14px">
+      <span class="l">message stream</span>
+      <div class="ln" style="width: 75%; height: 16px"></div>
+      <div class="d" style="height: 32px; width: 60%; border-radius: 16px"><span class="l" style="top: 7px">route trace</span></div>
+      <div class="ln" style="width: 95%"></div><div class="ln" style="width: 85%"></div><div class="ln" style="width: 55%"></div>
+      <div class="d" style="height: 130px"><span class="l">code</span></div>
+      <div class="ln" style="width: 70%; height: 16px; margin-top: 10px"></div>
+    </div>
+    <div class="b" style="grid-column: 4 / span 6; grid-row: 6 / span 1"><span class="l">composer</span></div>
+    <div class="b" style="grid-column: 10 / span 3; grid-row: 1 / span 3"><span class="l">routing path</span></div>
+    <div class="b" style="grid-column: 10 / span 3; grid-row: 4 / span 2"><span class="l">tier scores</span></div>
+    <div class="b" style="grid-column: 10 / span 2; grid-row: 6 / span 1"><span class="l">usage</span></div>
+    <div class="b" style="grid-column: 12 / span 1; grid-row: 6 / span 1"><span class="l">key</span></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

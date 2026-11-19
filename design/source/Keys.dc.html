@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Current — Keys and usage</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+.light{--ground:#ECEFF3;--card:#FFFFFF;--well:#F4F6F9;--well2:#E8ECF1;--line:#E3E7ED;--ink:#0C1220;--muted:#566174;--blue:#4285F4;--blue-ink:#1A73E8;--green:#34A853;--green-ink:#188038;--red:#EA4335;--red-ink:#D93025;--on-blue:#FFFFFF;--shadow:0 1px 2px rgba(12,18,32,.04),0 12px 32px -14px rgba(12,18,32,.14)}
+.dark{--ground:#05070A;--card:#10151C;--well:#171D26;--well2:#1F2631;--line:#232B37;--ink:#EEF2F7;--muted:#8B97A8;--blue:#8AB4F8;--blue-ink:#8AB4F8;--green:#81C995;--green-ink:#81C995;--red:#F28B82;--red-ink:#F28B82;--on-blue:#0A0E14;--shadow:inset 0 1px 0 rgba(255,255,255,.04),0 12px 32px -14px rgba(0,0,0,.7)}
+.card{background:var(--card);border-radius:28px;box-shadow:var(--shadow);box-sizing:border-box;min-width:0;min-height:0}
+.well{background:var(--well);border-radius:20px;padding:16px;box-sizing:border-box}
+.nav{transition:background .3s,color .3s,transform .35s cubic-bezier(.2,1.4,.4,1)}
+.nav:hover{background:var(--well2);color:var(--ink);transform:scale(1.04)}
+.pick{transition:background .3s,transform .35s cubic-bezier(.2,.8,.2,1)}
+.pick:hover{background:var(--well2);transform:translateX(3px)}
+.pill{transition:background .3s,transform .3s cubic-bezier(.2,1.4,.4,1)}
+.pill:hover{background:var(--well2);transform:scale(1.04)}
+.cta{transition:transform .4s cubic-bezier(.2,1.5,.4,1),box-shadow .3s}
+.cta:hover{transform:scale(1.03);box-shadow:0 8px 20px -6px var(--blue)}
+.seg{transition:background .35s,color .25s,box-shadow .35s}
+.draw{stroke-dasharray:2400;stroke-dashoffset:2400;animation:draw 1.6s cubic-bezier(.4,0,.2,1) .15s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.area{opacity:0;animation:fade 1s ease .8s forwards}
+@keyframes fade{to{opacity:1}}
+.grow{transform-origin:left center;transform:scaleX(0);animation:grow 1s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes grow{to{transform:scaleX(1)}}
+.rowin{animation:rowin .6s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rowin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.live{animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@media (max-width:960px){.root{height:auto!important}.shell{flex-direction:column!important}.side{width:auto!important}.body{grid-template-columns:minmax(0,1fr)!important}.body>*{grid-column:auto!important}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.area{opacity:1}.draw{stroke-dashoffset:0}.grow{transform:none}}
+</style>
+</helmet>
+<div class="root {{theme}}" style="height: 100vh; min-height: 760px; box-sizing: border-box; padding: 12px; display: flex; flex-direction: column; gap: 12px; background: var(--ground); color: var(--ink); font-family: Geist, Inter, system-ui, sans-serif">
+
+  <nav class="card" aria-label="Primary" style="flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 10px 10px 18px; border-radius: 24px">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">
+      <svg width="30" height="30" viewBox="0 0 26 26" aria-hidden="true"><rect x="2" y="4" width="22" height="18" rx="6" style="fill: var(--well2)"></rect><rect x="5.5" y="7.5" width="15" height="11" rx="3.5" fill="#0E1218"></rect><rect x="8.5" y="11" width="3" height="4" rx="1.2" fill="#4285F4"></rect><rect x="14.5" y="11" width="3" height="4" rx="1.2" fill="#4285F4"></rect></svg>
+      current
+    </a>
+    <div style="display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-radius: 999px; background: var(--well)">
+      <a class="nav" href="Main.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"></rect><path d="M12 8v8M8 12h8"></path></svg>New</a>
+      <a class="nav" href="Chat.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path></svg>Chats</a>
+      <a class="nav" href="Routing.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2"></circle><path d="M6 7v4a5 5 0 0 0 5 5h7"></path><path d="M15 13l3 3-3 3"></path><path d="M6 11v8"></path></svg>Routing</a>
+      <a class="nav" href="Keys.dc.html" aria-current="page" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; background: var(--card); color: var(--ink); box-shadow: var(--shadow)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M16 7l3 3"></path></svg>Keys &amp; usage</a>
+    </div>
+    <button type="button" class="nav" onClick="{{toggleTheme}}" aria-label="{{themeLabel}}" style="width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--well); color: var(--ink); display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg></button>
+  </nav>
+
+  <div class="shell" style="flex: 1; min-height: 0; display: flex; gap: 12px">
+  <aside class="card side" aria-label="API keys" style="width: 280px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 12px">
+      <h2 style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">Keys</h2>
+      <span style="padding: 4px 10px; border-radius: 999px; background: var(--well); font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">{{keyCount}} active</span>
+    </div>
+    <sc-for list="{{keys}}" as="k" hint-placeholder-count="3">
+      <button type="button" class="pick" onClick="{{k.pick}}" aria-pressed="{{k.pressed}}" style="{{k.style}}">
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--ink)"><span class="live" aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: inline-block"></span>{{k.name}}</span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">used {{k.last}}</span>
+      </button>
+    </sc-for>
+    <div style="flex: 1"></div>
+    <button type="button" class="cta" style="min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 999px; background: var(--blue); color: var(--on-blue); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      Create key
+    </button>
+  </aside>
+
+  <div class="body" style="flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px">
+    <main class="card" style="grid-column: span 8; display: flex; flex-direction: column; overflow-y: auto; padding: 18px 14px 14px; gap: 12px">
+      <header style="flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px">
+        <h1 style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">{{cur.name}}</h1>
+        <button type="button" class="pill" style="min-height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--well); color: var(--red-ink); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Revoke key</button>
+      </header>
+
+      <section class="well" aria-label="Key" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 8px 8px 18px; border-radius: 999px">
+        <code style="flex: 1 1 260px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Geist Mono', monospace; font-size: 13px">{{shown}}</code>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">{{cur.scope}}</span>
+        <div style="display: flex; gap: 4px">
+          <button type="button" class="pill" onClick="{{toggleShow}}" aria-label="{{showLabel}}" style="min-width: 64px; min-height: 40px; border: 0; border-radius: 999px; background: var(--card); color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">{{showText}}</button>
+          <button type="button" class="pill" aria-label="Copy key" style="width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--card); color: var(--ink); display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.5"></rect><path d="M5 15V6a2 2 0 0 1 2-2h8"></path></svg></button>
+        </div>
+      </section>
+
+      <section class="well" aria-label="Requests over time" style="display: flex; flex-direction: column; gap: 14px; padding: 20px 22px">
+        <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 13px; color: var(--muted)">Requests</span>
+            <span style="font-size: 32px; font-weight: 600; letter-spacing: -0.035em">{{total}}</span>
+          </div>
+          <div role="radiogroup" aria-label="Range" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--well2)">
+            <sc-for list="{{ranges}}" as="r" hint-placeholder-count="3">
+              <button type="button" class="seg" role="radio" aria-checked="{{r.checked}}" onClick="{{r.pick}}" style="{{r.style}}">{{r.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+        <svg viewBox="0 0 1000 170" preserveAspectRatio="none" role="img" aria-label="Line chart of requests over the selected range" style="width: 100%; height: 170px; display: block; overflow: visible">
+          <path class="area" d="{{areaPath}}" style="fill: color-mix(in srgb, var(--blue) 16%, transparent)"></path>
+          <path class="draw" d="{{linePath}}" fill="none" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" style="stroke: var(--blue)"></path>
+        </svg>
+        <div style="display: flex; justify-content: space-between; font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)"><span>{{startLabel}}</span><span>now</span></div>
+      </section>
+
+      <section class="well" aria-label="Recent requests" style="display: flex; flex-direction: column; gap: 6px; padding: 18px 14px">
+        <h2 style="margin: 0 8px 6px; font-size: 13px; font-weight: 500; color: var(--muted)">Recent requests</h2>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; min-width: 560px; border-collapse: separate; border-spacing: 0 4px; font-size: 14px">
+            <thead>
+              <tr style="text-align: left; color: var(--muted); font-size: 12px">
+                <th style="padding: 4px 12px; font-weight: 500">Time</th>
+                <th style="padding: 4px 12px; font-weight: 500">Tier</th>
+                <th style="padding: 4px 12px; font-weight: 500">Model</th>
+                <th style="padding: 4px 12px; font-weight: 500">Status</th>
+                <th style="padding: 4px 12px; font-weight: 500; text-align: right">Latency</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{log}}" as="q" hint-placeholder-count="6">
+                <tr class="rowin" style="{{q.rowStyle}}">
+                  <td style="padding: 10px 12px; background: var(--card); border-radius: 14px 0 0 14px; font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--muted)">{{q.t}}</td>
+                  <td style="padding: 10px 12px; background: var(--card)"><span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: {{q.c}}; display: inline-block"></span>{{q.tier}}</span></td>
+                  <td style="padding: 10px 12px; background: var(--card); font-family: 'Geist Mono', monospace; font-size: 13px">{{q.model}}</td>
+                  <td style="padding: 10px 12px; background: var(--card); font-weight: 500; color: {{q.sc}}">{{q.status}}</td>
+                  <td style="padding: 10px 12px; background: var(--card); border-radius: 0 14px 14px 0; font-family: 'Geist Mono', monospace; font-size: 13px; text-align: right">{{q.ms}} ms</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <aside class="card" aria-label="Limits" style="grid-column: span 4; padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto">
+      <section class="well" style="display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <h2 style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted)">Free-tier headroom</h2>
+          <span style="font-size: 12px; color: var(--muted)">Requests used today, per provider</span>
+        </div>
+        <sc-for list="{{providers}}" as="p" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; font-size: 14px"><span style="font-weight: 500">{{p.name}}</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: {{p.tc}}">{{p.used}} / {{p.limit}}</span></div>
+            <div style="height: 10px; border-radius: 999px; background: var(--well2); overflow: hidden"><div class="grow" style="{{p.barStyle}}"></div></div>
+          </div>
+        </sc-for>
+      </section>
+      <section class="well" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px">
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: var(--muted)">Rate limit</span><span style="font-size: 15px; font-weight: 600">[LIMIT]/min</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: var(--muted)">Tiers allowed</span><span style="font-size: 15px; font-weight: 600">{{cur.tiers}}</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: var(--muted)">Created</span><span style="font-size: 15px; font-weight: 600">[DATE]</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: var(--muted)">Errors today</span><span style="font-size: 15px; font-weight: 600; color: var(--red-ink)">{{cur.errors}}</span></div>
+      </section>
+    </aside>
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { theme: null, sel: 0, range: '7d', show: false }; }
+  renderVals() {
+    const theme = this.state.theme || this.props.theme || 'light';
+    const keyDefs = [
+      { name: 'portfolio-site', last: '2 min ago', masked: 'cur_live_••••••••••••••••3f9a', scope: 'tier: auto', tiers: 'All', errors: 2 },
+      { name: 'pi-watchdog', last: '1 h ago', masked: 'cur_live_••••••••••••••••b71c', scope: 'tier: fast only', tiers: 'Fast', errors: 0 },
+      { name: 'edge-platform', last: 'yesterday', masked: 'cur_live_••••••••••••••••09de', scope: 'tier: auto', tiers: 'All', errors: 5 }
+    ];
+    const sel = this.state.sel;
+    const cur = keyDefs[sel];
+    const keys = keyDefs.map((k, i) => {
+      const on = i === sel;
+      return {
+        name: k.name, last: k.last, pressed: on ? 'true' : 'false',
+        pick: () => this.setState({ sel: i, show: false }),
+        style: 'display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px; border: 0; border-radius: 16px; font-family: inherit; cursor: pointer; ' +
+          (on ? 'background: var(--well2)' : 'background: transparent')
+      };
+    });
+    const series = {
+      '24h': { total: '1,204', start: '24h ago', pts: [12, 18, 9, 6, 4, 5, 11, 26, 44, 52, 61, 58, 49, 63, 70, 66, 59, 72, 81, 64, 48, 37, 29, 22] },
+      '7d': { total: '8,931', start: '7 days ago', pts: [40, 52, 47, 61, 58, 74, 69, 83, 77, 92, 88, 71, 66, 95] },
+      '30d': { total: '31,560', start: '30 days ago', pts: [22, 30, 28, 35, 41, 38, 46, 44, 52, 49, 57, 61, 55, 63, 70, 66, 72, 69, 78, 74, 81, 86, 79, 88, 92, 85, 94, 90, 97, 99] }
+    };
+    const range = this.state.range;
+    const s = series[range];
+    const max = Math.max.apply(null, s.pts);
+    const step = 1000 / (s.pts.length - 1);
+    const xy = s.pts.map((v, i) => [i * step, 162 - (v / max) * 148]);
+    let linePath = 'M' + xy[0][0].toFixed(1) + ' ' + xy[0][1].toFixed(1);
+    for (let i = 1; i < xy.length; i++) {
+      const p0 = xy[i - 1], p1 = xy[i], mx = (p0[0] + p1[0]) / 2;
+      linePath += ' C' + mx.toFixed(1) + ' ' + p0[1].toFixed(1) + ' ' + mx.toFixed(1) + ' ' + p1[1].toFixed(1) + ' ' + p1[0].toFixed(1) + ' ' + p1[1].toFixed(1);
+    }
+    const ranges = ['24h', '7d', '30d'].map((r) => {
+      const on = r === range;
+      return {
+        label: r, checked: on ? 'true' : 'false',
+        pick: () => this.setState({ range: r }),
+        style: 'min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; ' +
+          (on ? 'background: var(--card); color: var(--ink); box-shadow: var(--shadow)' : 'background: transparent; color: var(--muted)')
+      };
+    });
+    const tc = { fast: 'var(--green)', balanced: 'var(--blue)', deep: 'var(--red)' };
+    const logDefs = [
+      ['14:02:11', 'balanced', 'llama-3.3-70b', 200, 412],
+      ['14:01:47', 'fast', 'gemini-2.5-flash-lite', 200, 186],
+      ['13:58:30', 'deep', 'gemini-2.5-pro', 200, 2140],
+      ['13:55:02', 'fast', 'llama-3.1-8b', 429, 94],
+      ['13:52:19', 'balanced', 'qwen-3-32b', 200, 978],
+      ['13:49:40', 'deep', 'deepseek-r1', 200, 3310]
+    ];
+    const log = logDefs.map((r, i) => ({
+      t: r[0], tier: r[1], c: tc[r[1]], model: r[2], ms: r[4],
+      status: r[3] === 200 ? '200 OK' : r[3] + ' → fallback',
+      sc: r[3] === 200 ? 'var(--green-ink)' : 'var(--red-ink)',
+      rowStyle: 'animation-delay: ' + (0.1 + i * 0.06) + 's'
+    }));
+    const provDefs = [
+      { name: 'Groq', used: 640, limit: 1000 },
+      { name: 'Google AI Studio', used: 310, limit: 1500 },
+      { name: 'Cerebras', used: 120, limit: 1000 },
+      { name: 'OpenRouter', used: 46, limit: 50 }
+    ];
+    const providers = provDefs.map((p, i) => {
+      const pct = p.used / p.limit;
+      const hot = pct > 0.85;
+      return {
+        name: p.name, used: p.used, limit: p.limit,
+        tc: hot ? 'var(--red-ink)' : 'var(--muted)',
+        barStyle: 'height: 10px; border-radius: 999px; width: ' + Math.round(pct * 100) + '%; background: ' + (hot ? 'var(--red)' : 'var(--green)') + '; animation-delay: ' + (0.3 + i * 0.1) + 's'
+      };
+    });
+    const show = this.state.show;
+    return {
+      theme, keys, cur, ranges, log, providers,
+      keyCount: keyDefs.length,
+      total: s.total, startLabel: s.start, linePath, areaPath: linePath + ' L1000 170 L0 170 Z',
+      shown: show ? 'cur_live_[YOUR KEY]' : cur.masked,
+      showText: show ? 'Hide' : 'Show',
+      showLabel: (show ? 'Hide ' : 'Show ') + cur.name + ' key',
+      toggleShow: () => this.setState({ show: !show }),
+      themeLabel: theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme',
+      toggleTheme: () => this.setState({ theme: theme === 'light' ? 'dark' : 'light' })
+    };
+  }
+}
+</script>
+</body>
+</html>
