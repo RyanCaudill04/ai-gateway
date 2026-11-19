@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,8 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apikeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
 )
 
 const testProviders = `
@@ -78,8 +82,35 @@ func wantEnvelope(t *testing.T, w *httptest.ResponseRecorder, typ, code string) 
 	}
 }
 
+// testAPIKeys returns a service key store on a fresh database, holding one
+// active key named "test-svc" with no cap, and that key.
+func testAPIKeys(t *testing.T) (*apikeys.Store, string) {
+	t.Helper()
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "gateway.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := apikeys.Open(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		s.Close(context.Background())
+		db.Close()
+	})
+	key, prefix, hash, err := apikeys.Generate("test-svc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Create(context.Background(), apikeys.NewKey{Name: "test-svc", Prefix: prefix, Hash: hash}); err != nil {
+		t.Fatal(err)
+	}
+	return s, key
+}
+
 func TestOnlyHealthChecksArePublic(t *testing.T) {
-	h := newHandler(denyAll{}, nil, testConfig(t), allEnabled)
+	keys, _ := testAPIKeys(t)
+	h := newHandler(handlerDeps{authn: denyAll{}, cfg: testConfig(t), enabled: allEnabled, apiKeys: keys})
 
 	for _, path := range []string{"/healthz", "/api/health"} {
 		if w := do(h, "GET", path); w.Code != http.StatusOK {
@@ -96,6 +127,9 @@ func TestOnlyHealthChecksArePublic(t *testing.T) {
 		{"GET", "/api/health/"},
 		{"POST", "/v1/chat/completions"},
 		{"GET", "/v1/models"},
+		{"GET", "/v1/does-not-exist"},
+		{"GET", "/v1"},
+		{"GET", "/v1/"},
 		{"GET", "/"},
 	} {
 		if w := do(h, tc[0], tc[1]); w.Code != http.StatusUnauthorized {
@@ -107,7 +141,17 @@ func TestOnlyHealthChecksArePublic(t *testing.T) {
 }
 
 func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
-	h := newHandler(auth.Locked(errors.New("CF_ACCESS_AUD is empty")), nil, testConfig(t), allEnabled)
+	keys, key := testAPIKeys(t)
+	h := newHandler(handlerDeps{authn: auth.Locked(errors.New("CF_ACCESS_AUD is empty")), cfg: testConfig(t), enabled: allEnabled, apiKeys: keys})
+
+	// /v1/* doesn't depend on the Access settings: a valid key still works,
+	// and no key is still a 401 (not the 503 /api/* gives).
+	if w := do(h, "GET", "/v1/models", "Authorization", "Bearer "+key); w.Code != http.StatusOK {
+		t.Errorf("GET /v1/models with a key while locked = %d, want 200", w.Code)
+	}
+	if w := do(h, "GET", "/v1/models"); w.Code != http.StatusUnauthorized {
+		t.Errorf("GET /v1/models without a key while locked = %d, want 401", w.Code)
+	}
 
 	if w := do(h, "GET", "/api/health"); w.Code != http.StatusOK {
 		t.Errorf("GET /api/health = %d, want 200", w.Code)
@@ -122,24 +166,174 @@ func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
 	}
 }
 
-func TestModelsEndpointRequiresAuthAndListsModels(t *testing.T) {
-	if w := do(newHandler(denyAll{}, nil, testConfig(t), allEnabled), "GET", "/v1/models"); w.Code != http.StatusUnauthorized {
-		t.Errorf("unauthenticated GET /v1/models = %d, want 401", w.Code)
+func TestModelsEndpointRequiresKeyAndListsModels(t *testing.T) {
+	keys, key := testAPIKeys(t)
+	// AUTH_MODE=none turns off Access only: /v1/* still needs a key.
+	h := newHandler(handlerDeps{authn: auth.Disabled(), cfg: testConfig(t), enabled: allEnabled, apiKeys: keys})
+	if w := do(h, "GET", "/v1/models"); w.Code != http.StatusUnauthorized {
+		t.Errorf("GET /v1/models without a key (AUTH_MODE=none) = %d, want 401", w.Code)
+	} else {
+		wantEnvelope(t, w, "unauthorized", "unauthorized")
 	}
 
-	w := do(newHandler(auth.Disabled(), nil, testConfig(t), allEnabled), "GET", "/v1/models")
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"id":"groq/llama"`) {
-		t.Errorf("GET /v1/models = %d %s", w.Code, w.Body)
+	// A key is enough even when Access would refuse the caller.
+	for _, authn := range []auth.Authenticator{auth.Disabled(), denyAll{}, forbidAll{}} {
+		w := do(newHandler(handlerDeps{authn: authn, cfg: testConfig(t), enabled: allEnabled, apiKeys: keys}), "GET", "/v1/models", "Authorization", "Bearer "+key)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"id":"groq/llama"`) {
+			t.Errorf("%T: GET /v1/models = %d %s", authn, w.Code, w.Body)
+		}
+	}
+}
+
+func TestV1RoutesAndKeyBoundaries(t *testing.T) {
+	keys, key := testAPIKeys(t)
+	h := newHandler(handlerDeps{authn: denyAll{}, cfg: testConfig(t), enabled: allEnabled, apiKeys: keys})
+	bearer := "Bearer " + key
+
+	// With a key, unregistered /v1 paths are the normal 404/405, never open.
+	for _, tc := range []struct {
+		method, path string
+		want         int
+	}{
+		{"GET", "/v1/does-not-exist", http.StatusNotFound},
+		{"GET", "/v1", http.StatusNotFound},
+		{"POST", "/v1/models", http.StatusMethodNotAllowed},
+	} {
+		if w := do(h, tc.method, tc.path, "Authorization", bearer); w.Code != tc.want {
+			t.Errorf("%s %s with a key = %d, want %d", tc.method, tc.path, w.Code, tc.want)
+		}
+	}
+
+	// /api/* is still Access only: a service key alone gets 401 there.
+	for _, path := range []string{"/api/me", "/api/does-not-exist"} {
+		if w := do(h, "GET", path, "Authorization", bearer); w.Code != http.StatusUnauthorized {
+			t.Errorf("GET %s with only a service key = %d, want 401", path, w.Code)
+		}
+	}
+
+	// The health checks stay public, with or without a key.
+	for _, path := range []string{"/healthz", "/api/health"} {
+		if w := do(h, "GET", path, "Authorization", "Bearer nonsense"); w.Code != http.StatusOK {
+			t.Errorf("GET %s with a bad key = %d, want 200", path, w.Code)
+		}
+	}
+
+	// No CSRF check on /v1: a browser can't attach the key by itself, so a
+	// request carrying one isn't a forged cross-site request.
+	if w := do(h, "POST", "/v1/models", "Authorization", bearer, "Sec-Fetch-Site", "cross-site"); w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("cross-site POST /v1/models with a key = %d, want 405 (reached the route)", w.Code)
+	}
+
+	// Revoking through the store is seen by the handler on the next request.
+	if _, _, err := keys.Revoke(context.Background(), "test-svc"); err != nil {
+		t.Fatal(err)
+	}
+	if w := do(h, "GET", "/v1/models", "Authorization", bearer); w.Code != http.StatusUnauthorized {
+		t.Errorf("revoked key = %d, want 401", w.Code)
 	}
 }
 
 func TestProviderEnabledFollowsConfig(t *testing.T) {
-	enabled := providerEnabled(testConfig(t))
-	// Remote providers need a key (none can be registered until #40); local ones don't.
+	registered := map[string]bool{}
+	enabled := providerEnabled(testConfig(t), func(name string) bool { return registered[name] })
+	// Remote providers need a key; local ones don't. A key for a provider
+	// that isn't in the config enables nothing.
+	registered["nope"] = true
 	for name, want := range map[string]bool{"ollama": true, "groq": false, "nope": false} {
 		if got := enabled(name); got != want {
 			t.Errorf("providerEnabled(%q) = %v, want %v", name, got, want)
 		}
+	}
+	// Evaluated per call, not captured at startup.
+	registered["groq"] = true
+	if !enabled("groq") {
+		t.Error("providerEnabled(groq) didn't follow a newly registered key")
+	}
+}
+
+// TestModelsFollowKeyChanges registers a key through the admin API and
+// checks GET /v1/models shows the provider on the very next request, then
+// hides it again once the key is removed.
+func TestModelsFollowKeyChanges(t *testing.T) {
+	cfg := testConfig(t)
+	keys := testKeys(t)
+	enabled := providerEnabled(cfg, keys.Has)
+	apiKeys, apiKey := testAPIKeys(t)
+	pub := newHandler(handlerDeps{authn: auth.Disabled(), cfg: cfg, enabled: enabled, apiKeys: apiKeys})
+	adm := newAdminHandler(cfg, keys, enabled, apiKeys)
+
+	hasGroq := func() bool {
+		w := do(pub, "GET", "/v1/models", "Authorization", "Bearer "+apiKey)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /v1/models = %d", w.Code)
+		}
+		return strings.Contains(w.Body.String(), `"id":"groq/llama"`)
+	}
+	if hasGroq() {
+		t.Fatal("groq listed before a key was registered")
+	}
+
+	adminDo := func(method, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/admin/providers/groq/key", strings.NewReader(body))
+		r.Host = "127.0.0.1:8081"
+		w := httptest.NewRecorder()
+		adm.ServeHTTP(w, r)
+		return w
+	}
+	if w := adminDo("PUT", `{"key":"`+cliTestKey+`"}`); w.Code != http.StatusOK {
+		t.Fatalf("PUT key = %d %s", w.Code, w.Body)
+	}
+	if !hasGroq() {
+		t.Fatal("groq not listed right after its key was registered")
+	}
+	if got, ok := keys.Get("groq"); !ok || got != cliTestKey {
+		t.Fatalf("keys.Get(groq) = %q, %v", got, ok)
+	}
+	if w := adminDo("DELETE", ""); w.Code != http.StatusOK {
+		t.Fatalf("DELETE key = %d %s", w.Code, w.Body)
+	}
+	if hasGroq() {
+		t.Fatal("groq still listed after its key was removed")
+	}
+}
+
+// setServerEnv points run() at temp paths with a valid master key and a
+// loopback admin port picked by the OS.
+func setServerEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("GATEWAY_SECRET_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	t.Setenv("ADMIN_ADDR", "127.0.0.1:0")
+	t.Setenv("DATABASE_PATH", filepath.Join(t.TempDir(), "gateway.db"))
+	good := filepath.Join(t.TempDir(), "providers.yaml")
+	if err := os.WriteFile(good, []byte(testProviders), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PROVIDERS_CONFIG", good)
+}
+
+func TestRunRefusesBadMasterKey(t *testing.T) {
+	for name, value := range map[string]string{
+		"missing":      "",
+		"not base64":   "not-base64!!",
+		"wrong length": base64.StdEncoding.EncodeToString(make([]byte, 16)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			setServerEnv(t)
+			t.Setenv("GATEWAY_SECRET_KEY", value)
+			err := run("127.0.0.1:0")
+			if err == nil || !strings.Contains(err.Error(), "GATEWAY_SECRET_KEY") {
+				t.Errorf("run() = %v, want a GATEWAY_SECRET_KEY error", err)
+			}
+		})
+	}
+}
+
+func TestRunRefusesNonLoopbackAdminAddr(t *testing.T) {
+	setServerEnv(t)
+	t.Setenv("ADMIN_ADDR", ":0")
+	err := run("127.0.0.1:0")
+	if err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Errorf("run() = %v, want a loopback error", err)
 	}
 }
 
@@ -153,8 +347,8 @@ func TestRunStopsOnBadProvidersConfig(t *testing.T) {
 		"invalid file": invalid,
 	} {
 		t.Run(name, func(t *testing.T) {
+			setServerEnv(t)
 			t.Setenv("PROVIDERS_CONFIG", path)
-			t.Setenv("DATABASE_PATH", filepath.Join(t.TempDir(), "gateway.db"))
 			err := run("127.0.0.1:0")
 			if err == nil || !strings.Contains(err.Error(), "providers") {
 				t.Errorf("run() = %v, want a providers config error", err)
@@ -164,7 +358,8 @@ func TestRunStopsOnBadProvidersConfig(t *testing.T) {
 }
 
 func TestAuthenticatedRequests(t *testing.T) {
-	h := newHandler(auth.Disabled(), nil, testConfig(t), allEnabled)
+	keys, key := testAPIKeys(t)
+	h := newHandler(handlerDeps{authn: auth.Disabled(), cfg: testConfig(t), enabled: allEnabled, apiKeys: keys})
 
 	w := do(h, "GET", "/api/me")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"email"`) {
@@ -175,7 +370,7 @@ func TestAuthenticatedRequests(t *testing.T) {
 	} else {
 		wantEnvelope(t, w, "invalid_request", "not_found")
 	}
-	if w := do(h, "POST", "/v1/models"); w.Code != http.StatusMethodNotAllowed {
+	if w := do(h, "POST", "/v1/models", "Authorization", "Bearer "+key); w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("wrong method = %d, want 405", w.Code)
 	} else {
 		wantEnvelope(t, w, "invalid_request", "method_not_allowed")
@@ -191,6 +386,31 @@ func TestAuthenticatedRequests(t *testing.T) {
 	}
 }
 
+// The chat endpoint is registered behind the service key check: without a
+// key it is a 401, and with one an unknown model reaches the handler and gets
+// its 404 rather than the mux's.
+func TestChatCompletionsIsRegistered(t *testing.T) {
+	keys, key := testAPIKeys(t)
+	h := newHandler(handlerDeps{authn: auth.Disabled(), cfg: testConfig(t), enabled: allEnabled, apiKeys: keys})
+	body := `{"model":"nope","messages":[]}`
+
+	r := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("without a key: status = %d, want 401: %s", w.Code, w.Body)
+	}
+
+	r = httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer "+key)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", w.Code, w.Body)
+	}
+	wantEnvelope(t, w, "invalid_request", "model_not_found")
+}
+
 type forbidAll struct{}
 
 func (forbidAll) Authenticate(*http.Request) (auth.Identity, error) {
@@ -198,7 +418,8 @@ func (forbidAll) Authenticate(*http.Request) (auth.Identity, error) {
 }
 
 func TestForbiddenCallerGetsEnvelope(t *testing.T) {
-	w := do(newHandler(forbidAll{}, nil, testConfig(t), allEnabled), "GET", "/v1/models")
+	keys, _ := testAPIKeys(t)
+	w := do(newHandler(handlerDeps{authn: forbidAll{}, cfg: testConfig(t), enabled: allEnabled, apiKeys: keys}), "GET", "/api/me")
 	if w.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", w.Code)
 	}

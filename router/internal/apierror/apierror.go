@@ -316,6 +316,30 @@ func NotFound() *Error {
 	}
 }
 
+// ModelNotFound is a 404 for a `model` that is neither a route nor a
+// provider/model ID in the config. It mirrors OpenAI's answer to an unknown
+// model (404, code model_not_found, param model), so SDK users get the same
+// NotFoundError they would from OpenAI. The client's string is not echoed:
+// messages only hold text from the router's own config.
+func ModelNotFound() *Error {
+	return &Error{
+		Type: TypeInvalidRequest, Status: http.StatusNotFound,
+		Code: "model_not_found", Param: "model",
+		Message: "The requested model does not exist. GET /v1/models lists the models you can use.",
+	}
+}
+
+// RequestTooLarge is a 413 for a request body over the router's size limit.
+// It is the client's to fix (send smaller images, fewer messages), so the
+// type is invalid_request; the SDKs do not retry 413.
+func RequestTooLarge(limitBytes int64) *Error {
+	return &Error{
+		Type: TypeInvalidRequest, Status: http.StatusRequestEntityTooLarge,
+		Code:    "request_too_large",
+		Message: fmt.Sprintf("The request body is larger than the %d MiB limit.", limitBytes>>20),
+	}
+}
+
 // MethodNotAllowed is a 405 for a known path used with the wrong method. The
 // caller should also set the Allow header (Routes does).
 func MethodNotAllowed() *Error {
