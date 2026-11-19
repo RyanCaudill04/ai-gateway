@@ -108,7 +108,10 @@ func routeModel(cfg *config.Config, name string, enabled EnabledFunc) (Model, bo
 	usable := 0
 	for _, id := range cfg.Routes[name] {
 		p, model, ok := cfg.Lookup(id)
-		if !ok || !enabled(p.Name) {
+		// The same filter resolve uses, so the list never claims more than a
+		// request would do: a non-local entry in `private` (a config that
+		// skipped validation) is not listed, and local stays true.
+		if !ok || !enabled(p.Name) || !usableIn(name, p) {
 			continue
 		}
 		usable++

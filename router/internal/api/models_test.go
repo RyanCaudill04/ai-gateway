@@ -206,3 +206,20 @@ func TestEnabledIsReadPerRequest(t *testing.T) {
 		t.Fatalf("after removal: %d models, want 0", n)
 	}
 }
+
+// A private route that skipped config validation and holds a remote entry is
+// listed with only its local entries, so `local` is true whenever it is listed.
+func TestPrivateRouteIsLocalEvenWithABadConfig(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Routes[config.PrivateRoute] = []string{"groq/big", "ollama/llama"}
+	for _, m := range get(t, cfg, enabledSet("groq", "ollama")) {
+		if m.ID == "private" && (!m.Local || m.ContextLength != 4096) {
+			t.Errorf("private = %+v, want local with only the ollama entry counted", m)
+		}
+	}
+	// Only a remote entry: nothing usable, so it is not listed at all.
+	cfg.Routes[config.PrivateRoute] = []string{"groq/big"}
+	if slices.Contains(ids(get(t, cfg, enabledSet("groq", "ollama"))), "private") {
+		t.Error("private with only a remote entry must not be listed")
+	}
+}
