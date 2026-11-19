@@ -1,0 +1,87 @@
+.topbar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 10px 10px 18px;
+  border-radius: 24px;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* The tabs sit in a well-coloured pill track. */
+.topbar-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--well);
+}
+
+.topbar-tab,
+.topbar-theme {
+  transition:
+    background 0.3s,
+    color 0.3s,
+    transform 0.35s var(--spring);
+}
+
+.topbar-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.topbar-tab[aria-current='page'] {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.topbar-theme {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--well);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.topbar-tab:hover,
+.topbar-theme:hover {
+  background: var(--well2);
+  color: var(--ink);
+  transform: scale(1.06);
+}
+
+.topbar-tab[aria-current='page']:hover {
+  background: var(--card);
+}
+
+.topbar-tab:focus-visible,
+.topbar-theme:focus-visible,
+.topbar-brand:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
