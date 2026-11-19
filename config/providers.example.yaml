@@ -8,14 +8,32 @@ providers:
   groq:
     base_url: https://api.groq.com/openai/v1
     models:
-      - id: llama-3.3-70b-versatile
+      - id: openai/gpt-oss-20b
+        context_length: 131072
+      - id: openai/gpt-oss-120b
         context_length: 131072
 
   gemini:
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
     models:
-      - id: gemini-2.5-flash
+      - id: gemini-3.5-flash-lite
         context_length: 1048576
+      - id: gemini-3.1-flash-lite
+        context_length: 1048576
+      - id: gemini-3.6-flash
+        context_length: 1048576
+      - id: gemini-3.8-flash
+        context_length: 1048576
+
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    models:
+      - id: google/gemma-4-26b-a4b-it:free
+        context_length: 262144
+      - id: nvidia/nemotron-3-ultra-550b-a55b:free
+        context_length: 1000000
+      - id: nvidia/nemotron-3.5-lightning:free
+        context_length: 1000000
 
   ollama:
     base_url: ${OLLAMA_BASE_URL}/v1
@@ -25,13 +43,26 @@ providers:
         context_length: 131072
 
 # Virtual models: what clients ask for by name. Tried in order; on 429/5xx, go to the next.
+# The gateway's own clients expect these four names: fast, smart, long-context, private.
 routes:
+  # Groq first because it is the quickest and has the largest free request pool.
+  # Ollama last so the route never fails outright.
   fast:
-    - groq/llama-3.3-70b-versatile
-    - gemini/gemini-2.5-flash
+    - groq/openai/gpt-oss-20b
+    - gemini/gemini-3.5-flash-lite
+    - openrouter/google/gemma-4-26b-a4b-it:free
     - ollama/llama3.2:3b
+  # Groq first so Gemini's small daily allowance is kept in reserve.
+  smart:
+    - groq/openai/gpt-oss-120b
+    - gemini/gemini-3.8-flash
+    - openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+  # Groq is left out because its free tier caps tokens per minute too low for long prompts.
   long-context:
-    - gemini/gemini-2.5-flash
-    - groq/llama-3.3-70b-versatile
+    - gemini/gemini-3.5-flash-lite
+    - gemini/gemini-3.1-flash-lite
+    - openrouter/nvidia/nemotron-3.5-lightning:free
+    - gemini/gemini-3.6-flash
+  # Local providers only.
   private:
     - ollama/llama3.2:3b
