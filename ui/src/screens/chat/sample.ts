@@ -28,6 +28,10 @@ export interface Turn {
   /** Prompt size the classifier saw. */
   tokens: number
   reply: Reply
+  /** The reply's raw text, kept so the conversation can be sent back as history. */
+  raw?: string
+  /** True while the reply is still arriving. */
+  streaming?: boolean
 }
 
 /** The API key the screen pretends these requests came in on. */
