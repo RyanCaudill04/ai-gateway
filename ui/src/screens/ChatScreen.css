@@ -345,3 +345,45 @@
     max-height: 70vh;
   }
 }
+
+/* ---------- Status notices and reply errors (states the mockup doesn't draw) ---------- */
+
+.chat-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--well);
+  font-size: 14px;
+}
+
+.chat-notice-title {
+  font-weight: 600;
+}
+
+.chat-notice-error .chat-notice-title {
+  color: var(--red-ink);
+}
+
+.chat-notice-body {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-dock .chat-notice {
+  margin-bottom: 10px;
+}
+
+/* An error that ends a reply, under whatever text arrived before it. */
+.chat-error {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--red-ink);
+}

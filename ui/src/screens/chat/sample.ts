@@ -32,6 +32,8 @@ export interface Turn {
   raw?: string
   /** True while the reply is still arriving. */
   streaming?: boolean
+  /** Why the reply stopped early, shown under whatever text arrived. */
+  error?: string
 }
 
 /** The API key the screen pretends these requests came in on. */

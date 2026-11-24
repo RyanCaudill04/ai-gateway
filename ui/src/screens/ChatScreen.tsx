@@ -11,6 +11,7 @@ import { CHATS } from '../sample.ts'
 import { screenHref } from '../screens.ts'
 import { ChatTurn } from './chat/ChatTurn.tsx'
 import { TurnInspector } from './chat/TurnInspector.tsx'
+import { ChatNotice } from './chat/ChatNotice.tsx'
 import { toBlocks } from './chat/reply.ts'
 import { CANNED_REPLY, estimateTokens, type Turn } from './chat/sample.ts'
 import './ChatScreen.css'
@@ -47,7 +48,11 @@ export function ChatScreen() {
   useEffect(() => {
     const controller = new AbortController()
     listModels(controller.signal)
-      .then((models) => setModel(pickModel(models)))
+      .then((models) => {
+        const picked = pickModel(models)
+        setModel(picked)
+        if (!picked) setError('No model is available. Add a provider key and reload.')
+      })
       .catch((e: unknown) => {
         if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e))
       })
@@ -69,10 +74,7 @@ export function ChatScreen() {
   }
 
   async function send(text: string) {
-    if (!model) {
-      setError('No model is available. Add a provider key and reload.')
-      return
-    }
+    if (!model) return // the composer is disabled until a model has loaded
     setError(null)
 
     const id = crypto.randomUUID()
@@ -108,7 +110,7 @@ export function ChatScreen() {
     } catch (e) {
       if (!controller.signal.aborted) {
         const message = e instanceof Error ? e.message : String(e)
-        patch(id, (t) => ({ ...t, reply: { ...t.reply, blocks: [...toBlocks(raw), { kind: 'text', text: `⚠ ${message}` }] } }))
+        patch(id, (t) => ({ ...t, error: message }))
       }
     } finally {
       const ms = Math.round(performance.now() - started)
@@ -159,19 +161,30 @@ export function ChatScreen() {
       </header>
 
       <section className="chat-stream" aria-label="Conversation" ref={streamRef}>
-        {turns.length === 0 && (
-          <p className="chat-text">
-            {model ? `Chatting with ${model.id}. Say something.` : (error ?? 'Loading models…')}
-          </p>
-        )}
+        {turns.length === 0 &&
+          (error ? (
+            <ChatNotice tone="error" title="Can't chat yet">
+              {error}
+            </ChatNotice>
+          ) : model ? (
+            <ChatNotice tone="ready" title="Ready">
+              {model.provider} · {model.id.slice(model.provider.length + 1)}
+            </ChatNotice>
+          ) : (
+            <ChatNotice tone="busy" title="Loading models" />
+          ))}
         {turns.map((turn) => (
           <ChatTurn key={turn.id} turn={turn} thinking={turn.id === thinkingId} />
         ))}
       </section>
 
       <section className="chat-dock" aria-label="Reply">
-        {error && turns.length > 0 && <p className="chat-text">⚠ {error}</p>}
-        <Composer variant="dock" placeholder="Follow up…" label="Reply" onSend={send} disabled={busy} />
+        {error && turns.length > 0 && (
+          <ChatNotice tone="error" title="Couldn't send">
+            {error}
+          </ChatNotice>
+        )}
+        <Composer variant="dock" placeholder="Follow up…" label="Reply" onSend={send} disabled={busy || !model} />
       </section>
     </>
   )

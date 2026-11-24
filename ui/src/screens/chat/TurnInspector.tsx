@@ -21,8 +21,8 @@ export function TurnInspector({ turn, thinking }: TurnInspectorProps) {
     <>
       <section className="well chat-status" aria-label="Status">
         <span className="chat-status-text">
-          <Dot color={thinking ? 'blue' : 'green'} size={9} pulse={thinking} />
-          {thinking ? 'Thinking' : 'Answered'}
+          <Dot color={thinking ? 'blue' : turn.error ? 'red' : 'green'} size={9} pulse={thinking} />
+          {thinking ? 'Thinking' : turn.error ? 'Failed' : 'Answered'}
         </span>
         <span className="chat-mono-sub">
           {thinking ? `streaming from ${reply.provider}` : `${reply.ms} ms`}
