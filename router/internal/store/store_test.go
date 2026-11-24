@@ -34,8 +34,8 @@ func TestMigrationsApplyOnceAndPing(t *testing.T) {
 		if err := s.Reader().QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
-		if n != 1 {
-			t.Fatalf("schema_migrations rows = %d, want 1", n)
+		if want := migrationCount(t); n != want {
+			t.Fatalf("schema_migrations rows = %d, want %d", n, want)
 		}
 		s.Close()
 	}
@@ -159,4 +159,15 @@ func TestSecondLockFailsUntilReleased(t *testing.T) {
 		t.Fatalf("lock after release: %v", err)
 	}
 	again.Release()
+}
+
+// migrationCount is how many migrations ship, so tests don't break each time
+// a new one is added.
+func migrationCount(t *testing.T) int {
+	t.Helper()
+	ms, err := loadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(ms)
 }

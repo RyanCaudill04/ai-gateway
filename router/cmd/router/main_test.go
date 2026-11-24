@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apikeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 )
@@ -49,6 +51,20 @@ func (denyAll) Authenticate(*http.Request) (auth.Identity, error) {
 	return auth.Identity{}, auth.ErrUnauthenticated
 }
 
+// noKeys is a key store with no valid keys; goodKeys accepts "good-key".
+type noKeys struct{}
+
+func (noKeys) Verify(context.Context, string) (string, error) { return "", apikeys.ErrInvalid }
+
+type goodKeys struct{}
+
+func (goodKeys) Verify(_ context.Context, key string) (string, error) {
+	if key == "good-key" {
+		return "svc", nil
+	}
+	return "", apikeys.ErrInvalid
+}
+
 func do(h http.Handler, method, path string, headers ...string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, nil)
 	for i := 0; i+1 < len(headers); i += 2 {
@@ -79,7 +95,7 @@ func wantEnvelope(t *testing.T, w *httptest.ResponseRecorder, typ, code string) 
 }
 
 func TestOnlyHealthChecksArePublic(t *testing.T) {
-	h := newHandler(denyAll{}, nil, testConfig(t), allEnabled)
+	h := newHandler(denyAll{}, noKeys{}, nil, testConfig(t), allEnabled)
 
 	for _, path := range []string{"/healthz", "/api/health"} {
 		if w := do(h, "GET", path); w.Code != http.StatusOK {
@@ -107,7 +123,7 @@ func TestOnlyHealthChecksArePublic(t *testing.T) {
 }
 
 func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
-	h := newHandler(auth.Locked(errors.New("CF_ACCESS_AUD is empty")), nil, testConfig(t), allEnabled)
+	h := newHandler(auth.Locked(errors.New("CF_ACCESS_AUD is empty")), noKeys{}, nil, testConfig(t), allEnabled)
 
 	if w := do(h, "GET", "/api/health"); w.Code != http.StatusOK {
 		t.Errorf("GET /api/health = %d, want 200", w.Code)
@@ -122,14 +138,40 @@ func TestLockedWhenAuthIsNotConfigured(t *testing.T) {
 	}
 }
 
-func TestModelsEndpointRequiresAuthAndListsModels(t *testing.T) {
-	if w := do(newHandler(denyAll{}, nil, testConfig(t), allEnabled), "GET", "/v1/models"); w.Code != http.StatusUnauthorized {
-		t.Errorf("unauthenticated GET /v1/models = %d, want 401", w.Code)
+func TestV1NeedsAServiceKeyNotASignIn(t *testing.T) {
+	// A browser sign-in (or AUTH_MODE=none) does not open /v1.
+	h := newHandler(auth.Disabled(), goodKeys{}, nil, testConfig(t), allEnabled)
+	for name, headers := range map[string][]string{
+		"no key":     nil,
+		"wrong key":  {"Authorization", "Bearer nope"},
+		"not bearer": {"Authorization", "Basic good-key"},
+		"empty":      {"Authorization", "Bearer "},
+	} {
+		w := do(h, "GET", "/v1/models", headers...)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("%s: GET /v1/models = %d, want 401", name, w.Code)
+		}
+		wantEnvelope(t, w, "unauthorized", "unauthorized")
+	}
+	// Deny by default: a /v1 path that doesn't exist is still behind the check.
+	if w := do(h, "GET", "/v1/nothing-here"); w.Code != http.StatusUnauthorized {
+		t.Errorf("unknown /v1 path without a key = %d, want 401", w.Code)
 	}
 
-	w := do(newHandler(auth.Disabled(), nil, testConfig(t), allEnabled), "GET", "/v1/models")
+	w := do(h, "GET", "/v1/models", "Authorization", "Bearer good-key")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"id":"groq/llama"`) {
-		t.Errorf("GET /v1/models = %d %s", w.Code, w.Body)
+		t.Errorf("GET /v1/models with a key = %d %s", w.Code, w.Body)
+	}
+	// With a key, a missing route is the normal 404 in the error format.
+	if w := do(h, "GET", "/v1/nothing-here", "Authorization", "Bearer good-key"); w.Code != http.StatusNotFound {
+		t.Errorf("unknown /v1 path with a key = %d, want 404", w.Code)
+	}
+}
+
+func TestAPIStaysBehindSignInNotAServiceKey(t *testing.T) {
+	h := newHandler(denyAll{}, goodKeys{}, nil, testConfig(t), allEnabled)
+	if w := do(h, "GET", "/api/me", "Authorization", "Bearer good-key"); w.Code != http.StatusUnauthorized {
+		t.Errorf("a service key on /api/me = %d, want 401", w.Code)
 	}
 }
 
@@ -164,7 +206,7 @@ func TestRunStopsOnBadProvidersConfig(t *testing.T) {
 }
 
 func TestAuthenticatedRequests(t *testing.T) {
-	h := newHandler(auth.Disabled(), nil, testConfig(t), allEnabled)
+	h := newHandler(auth.Disabled(), goodKeys{}, nil, testConfig(t), allEnabled)
 
 	w := do(h, "GET", "/api/me")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"email"`) {
@@ -175,7 +217,7 @@ func TestAuthenticatedRequests(t *testing.T) {
 	} else {
 		wantEnvelope(t, w, "invalid_request", "not_found")
 	}
-	if w := do(h, "POST", "/v1/models"); w.Code != http.StatusMethodNotAllowed {
+	if w := do(h, "POST", "/v1/models", "Authorization", "Bearer good-key"); w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("wrong method = %d, want 405", w.Code)
 	} else {
 		wantEnvelope(t, w, "invalid_request", "method_not_allowed")
@@ -198,7 +240,7 @@ func (forbidAll) Authenticate(*http.Request) (auth.Identity, error) {
 }
 
 func TestForbiddenCallerGetsEnvelope(t *testing.T) {
-	w := do(newHandler(forbidAll{}, nil, testConfig(t), allEnabled), "GET", "/v1/models")
+	w := do(newHandler(forbidAll{}, noKeys{}, nil, testConfig(t), allEnabled), "GET", "/api/me")
 	if w.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", w.Code)
 	}

@@ -3,6 +3,37 @@
 Endpoints the router serves to clients. Everything except the health checks
 requires an authenticated caller. Add new endpoints as a `##` section below.
 
+## Authentication
+
+- **`/v1/*` is for services.** Send a service key as `Authorization: Bearer <key>`.
+  A browser sign-in (Cloudflare Access) does not open `/v1`, and neither does
+  `AUTH_MODE=none`. A missing, malformed, unknown or revoked key all get the same
+  `401` with `type: unauthorized`; the router's log says which it was. Every
+  path under `/v1` is behind the check, including ones that do not exist.
+- **`/api/*` is for the UI.** It needs a Cloudflare Access sign-in plus the CSRF
+  check. A service key alone gets `401` there.
+- **`/healthz` and `GET /api/health`** are public.
+
+Make, list and revoke keys on the machine that runs the router:
+
+```bash
+docker compose exec router /router keys create portfolio-site --daily-cap 500
+docker compose exec router /router keys list
+docker compose exec router /router keys revoke portfolio-site
+```
+
+- A key looks like `sk-<name>-<52 characters>` and is shown **once**, when it is
+  created. Only its SHA-256 hash is stored.
+- Names are 1 to 32 characters: lowercase letters, digits and hyphens.
+- Revoking applies on the next request, with no restart.
+- Creating a name whose key was revoked replaces it (key rotation). Creating a
+  name with an active key is an error.
+- `--daily-cap` is stored but **not enforced yet**.
+
+If the gateway sits behind Cloudflare Access, services also need Access to let
+`/v1/*` through (a Bypass policy or a service token), or they will get a login
+redirect before reaching the router's check (#146).
+
 ## GET /v1/models
 
 Lists the models a client can put in the `model` field. The shape follows

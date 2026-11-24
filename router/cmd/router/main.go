@@ -27,6 +27,7 @@ import (
 
 	"github.com/RyanCaudill04/ai-gateway/router/internal/api"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/apierror"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/apikeys"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
@@ -49,6 +50,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "backup failed:", err)
 			os.Exit(1)
 		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "keys" {
+		runKeys(os.Args[2:])
 		return
 	}
 
@@ -89,7 +95,7 @@ func run(addr string) error {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           newHandler(newAuthenticator(), db, cfg, providerEnabled(cfg)),
+		Handler:           newHandler(newAuthenticator(), apikeys.NewStore(db), db, cfg, providerEnabled(cfg)),
 		ReadHeaderTimeout: 10 * time.Second,
 		// No WriteTimeout on purpose: streamed completions can run for minutes.
 	}
@@ -148,9 +154,10 @@ type pinger interface{ Ping(context.Context) error }
 
 // newHandler builds the router's routes. Access is deny-by-default: the only
 // public routes are the two health checks registered by name below. Every
-// other path, including ones that don't exist yet, goes through authn first,
-// so a new endpoint can't be left open by forgetting to protect it.
-func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled api.EnabledFunc) http.Handler {
+// /v1 path needs a service key; every other path, including ones that don't
+// exist yet, goes through authn first, so a new endpoint can't be left open
+// by forgetting to protect it.
+func newHandler(authn auth.Authenticator, keys apikeys.Verifier, db pinger, cfg *config.Config, enabled api.EnabledFunc) http.Handler {
 	mux := http.NewServeMux()
 
 	// Internal only: Caddy forwards /v1/* and /api/* unchanged, so this
@@ -176,7 +183,7 @@ func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
-	// Everything registered on this mux requires an authenticated caller.
+	// Everything registered on this mux requires a signed-in caller (/api).
 	protected := http.NewServeMux()
 	// Who the router thinks is calling. Lets the UI tell "signed in" from "not".
 	protected.HandleFunc("GET /api/me", func(w http.ResponseWriter, r *http.Request) {
@@ -186,8 +193,12 @@ func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled
 		json.NewEncoder(w).Encode(map[string]string{"email": id.Email})
 	})
 
-	protected.Handle("GET /v1/models", api.Models(cfg, enabled))
-	protected.Handle("POST /v1/chat/completions", api.ChatCompletions(cfg, upstream.New(upstream.Options{}), enabled, apiKey))
+	// /v1 is for services: only a service key opens it (a sign-in does not),
+	// and every /v1 path is behind that check, registered or not.
+	v1 := http.NewServeMux()
+	v1.Handle("GET /v1/models", api.Models(cfg, enabled))
+	v1.Handle("POST /v1/chat/completions", api.ChatCompletions(cfg, upstream.New(upstream.Options{}), enabled, apiKey))
+	mux.Handle("/v1/", apikeys.Require(keys, apierror.Routes(v1)))
 
 	// The browser proves who it is with a cookie that it sends automatically,
 	// so another site could try to make it send requests here (CSRF). This
