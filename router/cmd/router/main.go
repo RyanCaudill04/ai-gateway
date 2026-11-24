@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/RyanCaudill04/ai-gateway/router/internal/auth"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/config"
 	"github.com/RyanCaudill04/ai-gateway/router/internal/store"
+	"github.com/RyanCaudill04/ai-gateway/router/internal/upstream"
 )
 
 func main() {
@@ -119,11 +121,16 @@ func run(addr string) error {
 	return nil
 }
 
+// apiKey returns a provider's API key. Until provider key storage lands (#40)
+// it comes from the environment (GROQ_API_KEY, GEMINI_API_KEY, ...). #40
+// replaces this body with a lookup in the key store.
+func apiKey(provider string) string {
+	return os.Getenv(strings.ToUpper(provider) + "_API_KEY")
+}
+
 // hasKey is the one place that knows whether a provider has a registered API
-// key. Until provider key storage lands (#40) nothing can be registered, so
-// only local providers are enabled. #40 replaces this body with a lookup in
-// the key store; startup and the request-time check below both use it.
-func hasKey(provider string) bool { return false }
+// key; startup and the request-time check below both use it.
+func hasKey(provider string) bool { return apiKey(provider) != "" }
 
 // providerEnabled answers "can this provider be used right now?" and is called
 // on every request, not once at startup, so a key registered while the router
@@ -180,6 +187,7 @@ func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled
 	})
 
 	protected.Handle("GET /v1/models", api.Models(cfg, enabled))
+	protected.Handle("POST /v1/chat/completions", api.ChatCompletions(cfg, upstream.New(upstream.Options{}), enabled, apiKey))
 
 	// The browser proves who it is with a cookie that it sends automatically,
 	// so another site could try to make it send requests here (CSRF). This
