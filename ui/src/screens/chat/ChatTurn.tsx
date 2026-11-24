@@ -1,4 +1,4 @@
-import { TierDot } from '../../components/ui/Dot.tsx'
+import { Dot, TierDot } from '../../components/ui/Dot.tsx'
 import type { Reply, Turn } from './sample.ts'
 
 /** The mono line above a reply: `● tier · model · provider · latency` (spec §5). */
@@ -59,6 +59,12 @@ export function ChatTurn({ turn, thinking }: ChatTurnProps) {
                 {block.text}
               </p>
             ),
+          )}
+          {turn.error && (
+            <p className="chat-error" role="alert">
+              <Dot color="red" size={8} />
+              {turn.error}
+            </p>
           )}
         </div>
       )}

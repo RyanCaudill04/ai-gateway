@@ -133,6 +133,25 @@ func TestModelsEndpointRequiresAuthAndListsModels(t *testing.T) {
 	}
 }
 
+func TestAPIMirrorsRequireAuthAndMatchV1(t *testing.T) {
+	for method, paths := range map[string][2]string{
+		"GET":  {"/v1/models", "/api/models"},
+		"POST": {"/v1/chat/completions", "/api/chat/completions"},
+	} {
+		for _, path := range paths {
+			if w := do(newHandler(denyAll{}, nil, testConfig(t), allEnabled), method, path); w.Code != http.StatusUnauthorized {
+				t.Errorf("unauthenticated %s %s = %d, want 401", method, path, w.Code)
+			}
+		}
+		// Signed in, both paths reach the same handler (an empty chat body is a 400 either way).
+		h := newHandler(auth.Disabled(), nil, testConfig(t), allEnabled)
+		a, b := do(h, method, paths[0]), do(h, method, paths[1])
+		if a.Code != b.Code || a.Body.String() != b.Body.String() {
+			t.Errorf("%s: %s gave %d %s, %s gave %d %s", method, paths[0], a.Code, a.Body, paths[1], b.Code, b.Body)
+		}
+	}
+}
+
 func TestProviderEnabledFollowsConfig(t *testing.T) {
 	enabled := providerEnabled(testConfig(t))
 	// Remote providers need a key (none can be registered until #40); local ones don't.

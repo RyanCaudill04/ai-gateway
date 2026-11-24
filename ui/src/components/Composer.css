@@ -75,12 +75,19 @@
   stroke-width: 2.2;
 }
 
-.send:hover {
+.send:hover:not(:disabled) {
   transform: scale(1.08);
   box-shadow: 0 8px 20px -6px var(--blue);
 }
 
-.send:active {
+.send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.send:active:not(:disabled) {
   transform: scale(0.92);
 }
 
