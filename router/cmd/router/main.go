@@ -186,8 +186,14 @@ func newHandler(authn auth.Authenticator, db pinger, cfg *config.Config, enabled
 		json.NewEncoder(w).Encode(map[string]string{"email": id.Email})
 	})
 
-	protected.Handle("GET /v1/models", api.Models(cfg, enabled))
-	protected.Handle("POST /v1/chat/completions", api.ChatCompletions(cfg, upstream.New(upstream.Options{}), enabled, apiKey))
+	// The same handlers are served under /api for the UI, which talks only to
+	// /api (#141). Access and CSRF protection apply to both.
+	models := api.Models(cfg, enabled)
+	chat := api.ChatCompletions(cfg, upstream.New(upstream.Options{}), enabled, apiKey)
+	protected.Handle("GET /v1/models", models)
+	protected.Handle("GET /api/models", models)
+	protected.Handle("POST /v1/chat/completions", chat)
+	protected.Handle("POST /api/chat/completions", chat)
 
 	// The browser proves who it is with a cookie that it sends automatically,
 	// so another site could try to make it send requests here (CSRF). This
