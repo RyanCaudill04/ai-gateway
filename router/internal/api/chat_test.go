@@ -58,7 +58,6 @@ func TestChatRejectsBadRequests(t *testing.T) {
 	for name, body := range map[string]string{
 		"bad json":      `{`,
 		"unknown model": `{"model":"nope/x"}`,
-		"streaming":     `{"model":"fake/m","stream":true}`,
 	} {
 		if w := post(h, body); w.Code != 400 {
 			t.Errorf("%s: got %d, want 400", name, w.Code)
@@ -73,5 +72,33 @@ func TestChatMapsProviderRateLimit(t *testing.T) {
 	})
 	if w := post(h, `{"model":"fake/m"}`); w.Code != 429 {
 		t.Errorf("got %d, want 429: %s", w.Code, w.Body)
+	}
+}
+
+func TestChatStreams(t *testing.T) {
+	h := chatHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n")
+		io.WriteString(w, "data: {\"choices\":[],\"usage\":{\"total_tokens\":3}}\n\n") // added by the router
+		io.WriteString(w, "data: [DONE]\n\n")
+	})
+
+	w := post(h, `{"model":"fake/m","stream":true}`)
+
+	if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("Content-Type %q", ct)
+	}
+	want := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n\n"
+	if w.Body.String() != want {
+		t.Errorf("got %q, want %q", w.Body.String(), want)
+	}
+}
+
+func TestChatStreamErrorBeforeFirstEvent(t *testing.T) {
+	h := chatHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	if w := post(h, `{"model":"fake/m","stream":true}`); w.Code != 429 {
+		t.Errorf("got %d, want 429", w.Code)
 	}
 }
