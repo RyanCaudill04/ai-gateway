@@ -1,0 +1,12 @@
+.tier-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tier-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
